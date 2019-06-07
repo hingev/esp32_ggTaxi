@@ -20,6 +20,9 @@
 #include "lwip/sys.h"
 #include "esp_log.h"
 
+/* My include files */
+#include "gg_https.h"
+
 /* FreeRTOS event group to signal when we are connected*/
 static EventGroupHandle_t s_wifi_event_group;
 /* The event group allows multiple bits for each event,
@@ -115,10 +118,26 @@ void app_main()
     printf("%dMB %s flash\n", spi_flash_get_chip_size() / (1024 * 1024),
             (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
 
+
+		/* Wait for the WiFi connection */
+		while ((xEventGroupWaitBits (s_wifi_event_group,
+																 WIFI_CONNECTED_BIT,
+																 pdFALSE,
+																 pdFALSE,
+																 10 / portTICK_PERIOD_MS) \
+						& WIFI_CONNECTED_BIT) == 0) {
+        /* printf("waiting for connection...\n"); */
+				/* fflush (stdout); */
+		}
+
+		gg_https_login ("", "");
+
+
     for (; ; ) {
         printf("...\n");
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
+
 
     /* esp_restart(); */
 }
