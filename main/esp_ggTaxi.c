@@ -22,6 +22,7 @@
 
 /* My include files */
 #include "gg_https.h"
+#include "gg_wss.h"
 
 /* FreeRTOS event group to signal when we are connected*/
 static EventGroupHandle_t s_wifi_event_group;
@@ -131,6 +132,8 @@ void app_main()
 		}
 
 		gg_https_login ("", "");
+
+		gg_start_websockets ();
 
 
     for (; ; ) {

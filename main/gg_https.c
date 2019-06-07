@@ -43,6 +43,25 @@ extern const uint8_t server_root_cert_pem_end[]   asm("_binary_server_root_cert_
 
 static const char *TAG = "HTTPS";
 
+static	const char *REQUEST_FORMAT =
+	"POST " WEB_URL "v1/auth/login" " HTTP/1.1\r\n"
+	"Host: "WEB_SERVER"\r\n"
+	/* "User-Agent: esp-idf/1.0 esp32\r\n" */
+	"Origin: https://dashboard.ggtaxi.com\r\n"
+	"Referer: https://dashboard.ggtaxi.com/\r\n"
+	"User-Agent: Mozilla/5.0\r\n"
+	"Accept: application/json, text/plain, */*\r\n"
+	"Content-Type: application/json;charset=UTF-8\r\n"
+	"Content-Length: %d\r\n"
+	"\r\n"
+	"%s";
+
+
+/* TODO: change the JSON generation */
+
+const char *CONTENT_FORMAT =									\
+	"{\"mobile\": \"%s\", \"password\": \"%s\", \"platform\": \"WEB\", \"platformVersion\": \"10\", \"appVersion\": \"toaster v0\", \"deviceName\": \"toaster\", \"deviceUUID\": \"fffffffffffff\"}";
+
 
 int gg_https_login (char * mobile,
 										char *password) {
@@ -53,22 +72,6 @@ int gg_https_login (char * mobile,
 
 	char buf[512];
 	int ret, len;
-
-	const char *REQUEST_FORMAT = "POST " WEB_URL "v1/auth/login" " HTTP/1.1\r\n"
-		"Host: "WEB_SERVER"\r\n"
-		/* "User-Agent: esp-idf/1.0 esp32\r\n" */
-		"Origin: https://dashboard.ggtaxi.com\r\n"
-		"Referer: https://dashboard.ggtaxi.com/\r\n"
-		"User-Agent: Mozilla/5.0\r\n"
-		"Accept: application/json, text/plain, */*\r\n"
-		"Content-Type: application/json;charset=UTF-8\r\n"
-		"Content-Length: %d\r\n"
-		"\r\n"
-		"%s";
-
-	/* TODO: change the JSON generation */
-	const char *CONTENT_FORMAT =									\
-		"{\"mobile\": \"%s\", \"password\": \"%s\", \"platform\": \"WEB\", \"platformVersion\": \"10\", \"appVersion\": \"toaster v0\", \"deviceName\": \"toaster\", \"deviceUUID\": \"fffffffffffff\"}";
 
 
 	char *REQUEST = NULL;
@@ -96,7 +99,7 @@ int gg_https_login (char * mobile,
 
 	assert (REQUEST != NULL);
 
-	ESP_LOGI (TAG, "Request: %s", REQUEST);
+	/* ESP_LOGI (TAG, "Request: %s", REQUEST); */
 
 	while(1) {
 		esp_tls_cfg_t cfg = {
@@ -170,6 +173,7 @@ int gg_https_login (char * mobile,
 					body = &buf[header_size+4];
 
 					ESP_LOGI (TAG, "Header: %s", header);
+					ESP_LOGI (TAG, "Body: %s", body);
 				}
 			}
 			cur = strtok_r (header, "\r\n", &ptr);
@@ -215,6 +219,7 @@ int gg_https_login (char * mobile,
 		} while(1);
 
 	exit:
+		free (REQUEST);
 		esp_tls_conn_delete(tls);
 		putchar('\n'); // JSON output doesn't have a newline at end
 
