@@ -48,7 +48,7 @@ static void gg_websockets_task (void *pvParameters) {
 
 	ESP_LOGI(TAG, "Trying to Start the WSS..");
 
-	char buf[512];
+	char buf[1024];
 	int ret, flags, len;
 
 	mbedtls_entropy_context entropy;
@@ -234,6 +234,9 @@ static void gg_websockets_task (void *pvParameters) {
 			for(int i = 0; i < len; i++) {
 				putchar(buf[i]);
 			}
+			putchar ('\n');
+
+
 		} while(1);
 
 		mbedtls_ssl_close_notify(&ssl);
