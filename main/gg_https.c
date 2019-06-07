@@ -18,6 +18,10 @@
 
 #include "esp_tls.h"
 
+/* My includes */
+#include "gg_https.h"
+#include "session.h"
+
 /* Constants that aren't configurable in menuconfig */
 #define WEB_SERVER "api.ggtaxi.com"
 #define WEB_PORT "443"
@@ -39,56 +43,9 @@ extern const uint8_t server_root_cert_pem_end[]   asm("_binary_server_root_cert_
 
 static const char *TAG = "HTTPS";
 
-/* From https://github.com/tkislan/url_encoder/blob/master/url_encoder.h */
-static const const char kUnreservedChar[] = {
-//0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 1
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, // 2
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, // 3
-  0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 4
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, // 5
-  0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, // 6
-  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, // 7
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 8
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 9
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // A
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // B
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // C
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // D
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // E
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  // F
-};
-
-static char *url_encode (char *data) {
-
-	char *result = malloc (16);
-	result[0] = 0x00;
-
-	size_t i;
-	for (i=0; i < strlen (data); ++i) {
-		if (kUnreservedChar[(int)data[i]]) {
-			char *r1;
-			asprintf (&r1, "%s%c", result, data[i]);
-			free (result);
-			result = r1;
-		} else {
-			char *r1;
-			asprintf (&r1, "%s%%%02X", result, data[i]);
-			free (result);
-			result = r1;
-		}
-	}
-
-	return result;
-
-}
 
 int gg_https_login (char * mobile,
 										char *password) {
-
-	/* Unit test! */
-	assert (strcmp ("%2BBLEH", url_encode ("+BLEH")) == 0);
 
 	ESP_LOGI(TAG, "Trying to do HTTPS login..");
 
@@ -109,6 +66,7 @@ int gg_https_login (char * mobile,
 		"\r\n"
 		"%s";
 
+	/* TODO: change the JSON generation */
 	const char *CONTENT_FORMAT =									\
 		"{\"mobile\": \"%s\", \"password\": \"%s\", \"platform\": \"WEB\", \"platformVersion\": \"10\", \"appVersion\": \"toaster v0\", \"deviceName\": \"toaster\", \"deviceUUID\": \"fffffffffffff\"}";
 
@@ -197,10 +155,63 @@ int gg_https_login (char * mobile,
 
 			len = ret;
 			ESP_LOGD(TAG, "%d bytes read", len);
-			/* Print response directly to stdout as it is read */
-			for(int i = 0; i < len; i++) {
-				putchar(buf[i]);
+
+			int status_code = -1;
+			/* Parsing */
+			enum {STATUS, HEADERS, DATA} cur_state = STATUS;
+			char *ptr = NULL;
+			char *cur = NULL;
+			char *header = buf;
+			char *body = NULL;
+			size_t header_size = 0;
+			for (; header_size < strlen (buf) - 4; ++header_size) {
+				if (strncmp (&buf[header_size], "\r\n\r\n", 4) == 0) {
+					buf[header_size] = 0;
+					body = &buf[header_size+4];
+
+					ESP_LOGI (TAG, "Header: %s", header);
+				}
 			}
+			cur = strtok_r (header, "\r\n", &ptr);
+
+			while (cur != NULL) {
+
+				/* printf ("Line: [%s]\n", cur); */
+
+				if (cur_state == STATUS) {
+					status_code = atoi (&cur[9]);
+					cur_state = HEADERS;
+				}
+				else if (cur_state == HEADERS) {
+					size_t k = 0;
+					while (k < strlen (cur) && cur[k++] != ':');
+					cur[k-1] = 0;
+					char *key = cur;
+					char *value = &cur[k+1];
+
+					if (strcmp (key, "X-Auth-UserId") == 0) {
+						strcpy (session.x_auth_userid, value);
+					}
+					else if (strcmp (key, "X-Auth-Token") == 0) {
+						strcpy (session.x_auth_token, value);
+					}
+					else if (strcmp (key, "X-Auth-UserType") == 0) {
+						strcpy (session.x_auth_usertype, value);
+					}
+					else if (strcmp (key, "X-Auth-Balance") == 0) {
+						strcpy (session.x_auth_balance, value);
+					}
+				}
+
+				cur = strtok_r (NULL, "\r\n", &ptr);
+			}
+
+			ESP_LOGI (TAG, "Status code: %d", status_code);
+
+			assert (status_code == 200);
+
+			ESP_LOGI (TAG, "Got the auth tokens!");
+
 		} while(1);
 
 	exit:
