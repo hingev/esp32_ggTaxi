@@ -25,6 +25,7 @@
 #include "gg_wss.h"
 
 #include "ws2812.h"
+#include "display.h"
 
 /* FreeRTOS event group to signal when we are connected*/
 static EventGroupHandle_t s_wifi_event_group;
@@ -133,14 +134,18 @@ void app_main()
 				/* fflush (stdout); */
 		}
 
+
+		ws2812_init_spi ();
+
+		display_task_start ();
+
 #if 0
 		gg_https_login ("", "");
 
 		gg_start_websockets ();
 #endif
 
-		ws2812_init_spi ();
-
+#if 0
 		Color cs[3] = { {255, 0, 0}, {0, 255, 0}, {0,0,255} };
 
 
@@ -152,11 +157,13 @@ void app_main()
 			cs[1] = cs[2];
 			cs[2] = t;
 		}
+#endif
 
     for (; ; ) {
         printf("...\n");
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
+
 
 
     /* esp_restart(); */

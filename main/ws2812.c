@@ -6,6 +6,7 @@
 #include "esp_system.h"
 #include "driver/spi_master.h"
 #include "driver/gpio.h"
+#include "esp_log.h"
 
 #include "ws2812.h"
 
@@ -56,6 +57,9 @@ void ws2812_send_colors (Color *c, uint8_t count) {
 	t.user=(void*)1;                //D/C needs to be set to 1
 	/* ret=spi_device_polling_transmit(spi, &t);  //Transmit! */
 	ret=spi_device_queue_trans(spi, &t, portMAX_DELAY);
+
+	/* ESP_LOGI ("WS2812", "return code: %d", ret); */
+
 	assert(ret==ESP_OK);            //Should have had no issues.
 
 }
@@ -77,7 +81,7 @@ void ws2812_init_spi (void) {
 		.sclk_io_num=14,
 		.quadwp_io_num=-1,
 		.quadhd_io_num=-1,
-		.max_transfer_sz=1000			/* FIXME: ..? */
+		.max_transfer_sz=24*4/8*20			/* FIXME: ..? */
 	};
 	spi_device_interface_config_t devcfg={
 		.clock_speed_hz=3333333,           //Clock out at 300 nS
@@ -96,6 +100,7 @@ void ws2812_init_spi (void) {
 
 	/* each real bit is 4 bits */
 	/* either 1000 or 1100 */
+	ESP_LOGD ("WS2812", "SPI hardware init done!");
 
 
 
