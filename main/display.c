@@ -33,10 +33,33 @@ static void display_task (void *pvParameters) {
 	int step = 0;
 	int i;
 
-	display_state = SEARCHING;
-	/* check the event group bits */
+	uint32_t res;
 
 	while (1) {
+		/* check the event group bits */
+
+		res = xEventGroupWaitBits (display_event_group,
+								   0xFF,
+								   1, /* xClearOnExit */
+								   0, /* xWaitForAllBits */
+								   30 / portTICK_PERIOD_MS);
+
+		if (res) {
+			if (res & (1 << IDLE)) {
+				display_state = IDLE;
+			}
+			else if (res & (1 << SEARCHING)) {
+				display_state = SEARCHING;
+			}
+			else if (res & (1 << FOUND)) {
+				display_state = FOUND;
+			}
+			/* reset the state machine */
+			step = 0;
+			cur_led = 0;
+			sub_state = 0;
+		}
+
 		switch (display_state) {
 		case IDLE:
 			if (sub_state == 0) {
@@ -98,7 +121,7 @@ static void display_task (void *pvParameters) {
 
 		printf ( "###");
 		/* printf ("###\n"); */
-		vTaskDelay (30 / portTICK_PERIOD_MS);
+		/* vTaskDelay (30 / portTICK_PERIOD_MS); */
 	}
 
 	free (leds);
@@ -113,5 +136,7 @@ void display_task_start () {
 }
 
 void display_state_set (enum DisplayState st) {
+	xEventGroupSetBits (display_event_group,
+						(1 << st));
 
 }

@@ -139,6 +139,10 @@ void app_main()
 
 		display_task_start ();
 
+		vTaskDelay (5000 / portTICK_PERIOD_MS);
+
+		display_state_set (SEARCHING);
+
 #if 0
 		gg_https_login ("", "");
 
