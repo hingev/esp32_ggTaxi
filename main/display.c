@@ -33,6 +33,9 @@ static void display_task (void *pvParameters) {
 	int step = 0;
 	int i;
 
+	display_state = SEARCHING;
+	/* check the event group bits */
+
 	while (1) {
 		switch (display_state) {
 		case IDLE:
@@ -69,7 +72,25 @@ static void display_task (void *pvParameters) {
 			}
 			break;
 		case SEARCHING:
-
+			if (sub_state == 0) {
+				cur_led = 0;
+				memset (leds, 0, LED_CNT * sizeof (Color));
+				sub_state = 1;
+			}
+			else if (sub_state == 1) {
+				for (i=0; i < LED_CNT; ++i) {
+					leds[i].g *= 0.8;
+				}
+				leds[cur_led].g = step;
+				step += 75;
+				if (step > 255) {
+					cur_led ++;
+					if (cur_led >= LED_CNT)
+						cur_led = 0;
+					step = 0;
+				}
+			}
+			ws2812_send_colors (leds, LED_CNT);
 			break;
 		default:
 			break;
