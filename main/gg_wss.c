@@ -44,6 +44,99 @@ static const char *PARAMS_FORMAT =
 	"token=%s&userId=%s&mode=%s&EIO=3&transport=websocket";
 
 
+static mbedtls_ssl_recv_t websocket_recv_cb ;
+
+static int net_would_block( const mbedtls_net_context *ctx )
+{
+    int err = errno;
+
+    /*
+     * Never return 'WOULD BLOCK' on a non-blocking socket
+     */
+    if( ( fcntl( ctx->fd, F_GETFL ) & O_NONBLOCK ) != O_NONBLOCK )
+    {
+        errno = err;
+        return( 0 );
+    }
+
+    switch( errno = err )
+    {
+#if defined EAGAIN
+        case EAGAIN:
+#endif
+#if defined EWOULDBLOCK && EWOULDBLOCK != EAGAIN
+        case EWOULDBLOCK:
+#endif
+            return( 1 );
+    }
+    return( 0 );
+}
+
+static 	mbedtls_ssl_context ssl;
+
+static int websocket_recv_cb (void *ctx,
+							  unsigned char *buf,
+							  size_t len) {
+
+	printf ("State : %d\n", ssl.state);
+
+	if (ssl.state < MBEDTLS_SSL_HANDSHAKE_OVER) {
+		int ret;
+		int fd = ((mbedtls_net_context *) ctx)->fd;
+
+		if( fd < 0 )
+			return( MBEDTLS_ERR_NET_INVALID_CONTEXT );
+
+		ret = (int) read( fd, buf, len );
+
+		if( ret < 0 )
+		{
+			if( net_would_block( ctx ) != 0 )
+				return( MBEDTLS_ERR_SSL_WANT_READ );
+
+			if( errno == EPIPE || errno == ECONNRESET )
+				return( MBEDTLS_ERR_NET_CONN_RESET );
+
+			if( errno == EINTR )
+				return( MBEDTLS_ERR_SSL_WANT_READ );
+
+			return( MBEDTLS_ERR_NET_RECV_FAILED );
+		}
+
+		return( ret );
+	}
+
+	else {
+		int ret;
+		int fd = ((mbedtls_net_context *) ctx)->fd;
+
+		if( fd < 0 )
+			return( MBEDTLS_ERR_NET_INVALID_CONTEXT );
+
+		ret = (int) read( fd, buf, len );
+
+		if( ret < 0 )
+		{
+			if( net_would_block( ctx ) != 0 )
+				return( MBEDTLS_ERR_SSL_WANT_READ );
+
+			if( errno == EPIPE || errno == ECONNRESET )
+				return( MBEDTLS_ERR_NET_CONN_RESET );
+
+			if( errno == EINTR )
+				return( MBEDTLS_ERR_SSL_WANT_READ );
+
+			return( MBEDTLS_ERR_NET_RECV_FAILED );
+		}
+
+		printf ("READ %d bytes\n", ret);
+		return( ret );
+	}
+
+}
+
+static TaskHandle_t xHandle = NULL;
+
 static void gg_websockets_task (void *pvParameters) {
 
 	ESP_LOGI(TAG, "Trying to Start the WSS..");
@@ -53,7 +146,7 @@ static void gg_websockets_task (void *pvParameters) {
 
 	mbedtls_entropy_context entropy;
 	mbedtls_ctr_drbg_context ctr_drbg;
-	mbedtls_ssl_context ssl;
+
 	mbedtls_x509_crt cacert;
 	mbedtls_ssl_config conf;
 	mbedtls_net_context server_fd;
@@ -67,7 +160,7 @@ static void gg_websockets_task (void *pvParameters) {
 
 	mbedtls_entropy_init(&entropy);
 	if((ret = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy,
-																	NULL, 0)) != 0)
+									NULL, 0)) != 0)
 	{
 		ESP_LOGE(TAG, "mbedtls_ctr_drbg_seed returned %d", ret);
 		abort();
@@ -76,7 +169,7 @@ static void gg_websockets_task (void *pvParameters) {
 	ESP_LOGI(TAG, "Loading the CA root certificate...");
 
 	ret = mbedtls_x509_crt_parse(&cacert, server_root_cert_pem_start,
-															 server_root_cert_pem_end-server_root_cert_pem_start);
+								 server_root_cert_pem_end-server_root_cert_pem_start);
 
 	if(ret < 0)
 	{
@@ -96,18 +189,18 @@ static void gg_websockets_task (void *pvParameters) {
 	ESP_LOGI(TAG, "Setting up the SSL/TLS structure...");
 
 	if((ret = mbedtls_ssl_config_defaults(&conf,
-																				MBEDTLS_SSL_IS_CLIENT,
-																				MBEDTLS_SSL_TRANSPORT_STREAM,
-																				MBEDTLS_SSL_PRESET_DEFAULT)) != 0)
+										  MBEDTLS_SSL_IS_CLIENT,
+										  MBEDTLS_SSL_TRANSPORT_STREAM,
+										  MBEDTLS_SSL_PRESET_DEFAULT)) != 0)
 	{
 		ESP_LOGE(TAG, "mbedtls_ssl_config_defaults returned %d", ret);
 		goto exit;
 	}
 
 	/* MBEDTLS_SSL_VERIFY_OPTIONAL is bad for security, in this example it will print
-		 a warning if CA verification fails but it will continue to connect.
+	   a warning if CA verification fails but it will continue to connect.
 
-		 You should consider using MBEDTLS_SSL_VERIFY_REQUIRED in your own code.
+	   You should consider using MBEDTLS_SSL_VERIFY_REQUIRED in your own code.
 	*/
 	mbedtls_ssl_conf_authmode(&conf, MBEDTLS_SSL_VERIFY_OPTIONAL);
 	mbedtls_ssl_conf_ca_chain(&conf, &cacert, NULL);
@@ -128,15 +221,15 @@ static void gg_websockets_task (void *pvParameters) {
 	char *PARAMS = NULL;
 
 	asprintf (&PARAMS,
-						PARAMS_FORMAT,
-						session.x_auth_token, /* token */
-						session.x_auth_userid, /* userid */
-						session.x_auth_usertype); /* mode */
+			  PARAMS_FORMAT,
+			  session.x_auth_token, /* token */
+			  session.x_auth_userid, /* userid */
+			  session.x_auth_usertype); /* mode */
 
 	asprintf (&REQUEST,
-						REQUEST_FORMAT,
-						PARAMS,
-						"x3JJHMbDL1EzLkh9GBhXDw=="); /* FIXME!!! Must be random */
+			  REQUEST_FORMAT,
+			  PARAMS,
+			  "x3JJHMbDL1EzLkh9GBhXDw=="); /* FIXME!!! Must be random */
 
 	free (PARAMS);
 
@@ -147,7 +240,7 @@ static void gg_websockets_task (void *pvParameters) {
 		ESP_LOGI(TAG, "Connecting to %s:%s...", WEB_SERVER, WEB_PORT);
 
 		if ((ret = mbedtls_net_connect(&server_fd, WEB_SERVER,
-																	 WEB_PORT, MBEDTLS_NET_PROTO_TCP)) != 0)
+									   WEB_PORT, MBEDTLS_NET_PROTO_TCP)) != 0)
 		{
 			ESP_LOGE(TAG, "mbedtls_net_connect returned -%x", -ret);
 			goto exit;
@@ -155,7 +248,10 @@ static void gg_websockets_task (void *pvParameters) {
 
 		ESP_LOGI(TAG, "Connected.");
 
-		mbedtls_ssl_set_bio(&ssl, &server_fd, mbedtls_net_send, mbedtls_net_recv, NULL);
+		mbedtls_ssl_set_bio(&ssl, &server_fd, mbedtls_net_send,
+							websocket_recv_cb
+							/* mbedtls_net_recv */
+							, NULL);
 
 		ESP_LOGI(TAG, "Performing the SSL/TLS handshake...");
 
@@ -189,8 +285,8 @@ static void gg_websockets_task (void *pvParameters) {
 		size_t written_bytes = 0;
 		do {
 			ret = mbedtls_ssl_write(&ssl,
-															(const unsigned char *)REQUEST + written_bytes,
-															strlen(REQUEST) - written_bytes);
+									(const unsigned char *)REQUEST + written_bytes,
+									strlen(REQUEST) - written_bytes);
 			if (ret >= 0) {
 				ESP_LOGI(TAG, "%d bytes written", ret);
 				written_bytes += ret;
@@ -236,6 +332,7 @@ static void gg_websockets_task (void *pvParameters) {
 			}
 			putchar ('\n');
 
+			/* TODO: */
 
 		} while(1);
 
@@ -264,11 +361,14 @@ static void gg_websockets_task (void *pvParameters) {
 		ESP_LOGI(TAG, "OUT!");
 		break;
 	}
+
+	vTaskDelete ( xHandle );
+
 }
 
 
 void gg_start_websockets () {
 
-	xTaskCreate(&gg_websockets_task, "wss_task", 8192, NULL, 5, NULL);
+	xTaskCreate(&gg_websockets_task, "wss_task", 8192, NULL, 5, &xHandle);
 
 }

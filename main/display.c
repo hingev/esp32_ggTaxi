@@ -132,7 +132,7 @@ static void display_task (void *pvParameters) {
 void display_task_start () {
     display_event_group = xEventGroupCreate();
 
-		xTaskCreate(&display_task, "display_task", 2048, NULL, 5, &xHandle);
+	xTaskCreate(&display_task, "display_task", 2048, NULL, 5, &xHandle);
 }
 
 void display_state_set (enum DisplayState st) {
