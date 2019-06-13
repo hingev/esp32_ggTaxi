@@ -146,16 +146,21 @@ void app_main()
 #endif
 
 #if 0
-		Color cs[3] = { {255, 0, 0}, {0, 255, 0}, {0,0,255} };
+		Color cs[3] = { {0xaa, 0xaa, 0xaa}, {0, 255, 0}, {0,0,255} };
 
 
+		int i;
 		for (; ;) {
-			ws2812_send_colors ((Color*)&cs, 3);
-			vTaskDelay (200 / portTICK_PERIOD_MS);
-			Color t = cs[0];
-			cs[0] = cs[1];
-			cs[1] = cs[2];
-			cs[2] = t;
+			ws2812_send_colors ((Color*)&cs, 1);
+			vTaskDelay (20 / portTICK_PERIOD_MS);
+			/* cs[0].r ^= 0xff; */
+			/* Color t = cs[0]; */
+			/* cs[0] = cs[1]; */
+			/* cs[1] = cs[2]; */
+			/* cs[2] = t; */
+			/* cs[0].r ++; */
+			/* cs[1].g ++; */
+			/* cs[2].b ++; */
 		}
 #endif
 

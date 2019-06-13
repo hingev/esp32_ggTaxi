@@ -13,6 +13,7 @@ typedef struct __Color__ Color;
 typedef struct {
 	size_t idx;
 	uint8_t *data;
+	size_t max_size;
 } DataQueue;
 
 void ws2812_init_spi (void);

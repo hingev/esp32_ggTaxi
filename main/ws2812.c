@@ -13,15 +13,17 @@
 static spi_device_handle_t spi;
 
 static void ws2812_add_byte (DataQueue *dq, uint8_t b) {
-	size_t i;
+	ssize_t i;
 	uint8_t cur_nibble = 0;
-	for (i=0; i < 8; ++i) {
+	for (i=7; i >= 0; --i) {
 		if (b & (1 << i))
 			cur_nibble = 0b1100;
 		else
 			cur_nibble = 0b1000;
 
-		if (i % 2 == 0) {
+		assert (dq->idx < dq->max_size);
+
+		if (i % 2 == 1) {
 			dq->data[dq->idx] = (cur_nibble << 4);
 		} else {
 			dq->data[dq->idx] |= cur_nibble;
@@ -36,12 +38,26 @@ static void ws2812_add_color (DataQueue *dq, Color c) {
 	ws2812_add_byte (dq, c.b);
 }
 
+char * data;
 void ws2812_send_colors (Color *c, uint8_t count) {
 	esp_err_t ret;
-	size_t color_len = (24 * 4 / 8 * count) + 1;
-	char * data = malloc (color_len);
 
-	DataQueue dq = {0, (uint8_t *)data};
+	spi_transaction_t *last_trans;
+	spi_transaction_t t;
+	size_t color_len = (24 * 4 / 8 * count) + 1;
+
+	/* if (spi_device_get_trans_result (spi, &last_trans, 1 / portTICK_PERIOD_MS) == ESP_OK) { */
+		/* if (data != NULL) */
+		/* 	free (data); */
+	/* } */
+
+	/* should be done only once.. asumingly ? */
+	if (data == NULL)
+		data = heap_caps_malloc (color_len, MALLOC_CAP_DMA);
+
+	assert (data != NULL);
+
+	DataQueue dq = {0, (uint8_t *)data, color_len};
 
 	size_t i;
 	for (i=0; i < count; ++i) {
@@ -50,13 +66,13 @@ void ws2812_send_colors (Color *c, uint8_t count) {
 	}
 	data[color_len - 1] = 0xf0;
 
-	spi_transaction_t t;
 	memset(&t, 0, sizeof(t));       //Zero out the transaction
 	t.length=color_len*8;                 //Len is in bytes, transaction length is in bits.
 	t.tx_buffer=data;               //Data
 	t.user=(void*)1;                //D/C needs to be set to 1
-	/* ret=spi_device_polling_transmit(spi, &t);  //Transmit! */
-	ret=spi_device_queue_trans(spi, &t, portMAX_DELAY);
+	/* takes only 0.5 mS, no need to use DMA probably */
+	ret=spi_device_polling_transmit(spi, &t);  //Transmit!
+	/* ret=spi_device_queue_trans(spi, &t, portMAX_DELAY); */
 
 	/* ESP_LOGI ("WS2812", "return code: %d", ret); */
 

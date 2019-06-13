@@ -18,38 +18,77 @@
 
 #define LED_CNT								16
 
+static TaskHandle_t xHandle = NULL;
 static EventGroupHandle_t display_event_group;
 
 static void display_task (void *pvParameters) {
 
-	Color *leds = heap_caps_malloc (LED_CNT * sizeof (Color),MALLOC_CAP_DMA );
+	Color *leds = malloc (LED_CNT * sizeof (Color) );
+
+	assert (leds != NULL);
+
 	int r1;
+	int sub_state = 0;
+	int cur_led = 0;
+	int step = 0;
+	int i;
 
 	while (1) {
-		r1 = esp_random () % LED_CNT;
 		switch (display_state) {
 		case IDLE:
-			memset (leds, 0, LED_CNT * sizeof (Color));
-			leds[r1].r = 255;
-			leds[r1].g = 255;
-			leds[r1].b = 255;
-			ws2812_send_colors (leds, LED_CNT);
+			if (sub_state == 0) {
+				printf ( "picking led");
+				r1 = esp_random () % LED_CNT;
+				memset (leds, 0, LED_CNT * sizeof (Color));
+				cur_led = r1;
+				ws2812_send_colors (leds, LED_CNT);
+				sub_state = 1;
+				step = 0;
+			}
+			else if (sub_state == 1) {
+				printf ( "Increaing /");
+				step ++;
+				leds[cur_led].r = step;
+				leds[cur_led].g = 0;
+				leds[cur_led].b = 0;
+
+				if (step == 30)
+					sub_state = 2;
+				ws2812_send_colors (leds, LED_CNT);
+			}
+			else if (sub_state == 2) {
+				printf ( "decreaing /");
+				step -- ;
+				leds[cur_led].r = step;
+				leds[cur_led].g = 0;
+				leds[cur_led].b = 0;
+
+				if (step == 0)
+					sub_state = 0;
+				ws2812_send_colors (leds, LED_CNT);
+			}
+			break;
+		case SEARCHING:
+
 			break;
 		default:
 			break;
 		}
 
-		printf ("###\n");
-		vTaskDelay (300 / portTICK_PERIOD_MS);
+		printf ( "###");
+		/* printf ("###\n"); */
+		vTaskDelay (30 / portTICK_PERIOD_MS);
 	}
 
 	free (leds);
+
+	vTaskDelete ( xHandle );
 }
 
 void display_task_start () {
     display_event_group = xEventGroupCreate();
 
-		xTaskCreate(&display_task, "display_task", 2048, NULL, 5, NULL);
+		xTaskCreate(&display_task, "display_task", 2048, NULL, 5, &xHandle);
 }
 
 void display_state_set (enum DisplayState st) {
