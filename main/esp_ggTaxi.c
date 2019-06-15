@@ -145,6 +145,31 @@ void app_main()
 	/* SECTION: create the button queue */
 	button_queue = xQueueCreate ( 5, sizeof (enum BUTTON_EVENT));
 
+	TxBuff nearby = {0, 0, 0x1};
+	nearby.len = asprintf (
+		&nearby.buff,
+		"420[\"get\", {\"data\": {\"lat\": %s, \"lng\": %s}, \"url\": \"/v1/socket/nearbyDrivers\"}]\"",
+		"40.18130824113917",	/* random location for tests */
+		"44.52259207196653");
+
+#if 0
+	TxBuff *enc;
+	tx_buff_encapsulate (&enc, &nearby, esp_random ());
+
+	ESP_LOGW ("ENCAP", "Enc len: %d; ENC: %p; ENC->buff: %p",
+			  enc->len,
+			  enc, enc->buff);
+
+	size_t ti;
+	for (ti=0; ti < enc->len; ++ti) {
+		printf ("%02X", enc->buff[ti]);
+	}
+
+	while (1) {
+
+	}
+#endif
+
 #if 1
 	display_task_start ();
 
@@ -160,6 +185,8 @@ void app_main()
 	enum { WAITING_FOR_WSS, NONE, ORDER_SENT, } cur_state = WAITING_FOR_WSS;
 	enum BUTTON_EVENT be;
 
+	TxBuff pong = {"2", 1, 0x09};
+
 	while (1) {
 		switch (cur_state) {
 		case WAITING_FOR_WSS:
@@ -169,13 +196,28 @@ void app_main()
 									  pdFALSE,
 									  portMAX_DELAY)) == WSS_CONNECTED) {
 				xQueueReset (button_queue);
+
+
+
 				cur_state = NONE;
+
 			}
 			break;
 		case NONE:
-			if (xQueueReceive( button_queue, &( be ), ( TickType_t ) portMAX_DELAY )) {
+			if (xQueueReceive( button_queue, &( be ),
+							   ( TickType_t ) 10000 / portTICK_PERIOD_MS )) {
 				/* button pressed */
 				ESP_LOGI ("MAIN", "Button %d was pressed!", be);
+				if (be == BUT_EV_1) {
+					/* TODO: send the order */
+
+					/* send request for the nearby drivers */
+					xQueueSend (tx_queue, &nearby, (TickType_t) 0);
+
+				}
+			} else {
+				/* send a pong */
+				xQueueSend (tx_queue, &pong, (TickType_t) 0);
 			}
 			break;
 		default:

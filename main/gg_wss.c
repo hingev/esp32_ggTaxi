@@ -22,7 +22,73 @@
 #include "common.h"
 #include "session.h"
 
+int tx_buff_encapsulate (TxBuff **res, TxBuff *src, uint32_t mask) {
+
+	ESP_LOGI ("ENC", "MASK: %08X", mask);
+
+	TxBuff *tb = calloc (1, sizeof (TxBuff));
+
+	assert (tb != NULL);
+
+	int header_size = -1;
+	if (src->len <= 125) {
+		header_size = 2;
+	}
+	else if (src->len > 125 	/* FIXME: what if really big ?? */) {
+		header_size = 4;
+	}
+
+	ESP_LOGI ("ENC", "Header size: %d", header_size);
+
+	tb->len = src->len + header_size + 4; /* 4 bytes for masking; 4 just in case */
+
+	ESP_LOGI ("ENC", "TB-len = %d", tb->len);
+	ESP_LOGI ("ENC", "SRc len: %d", src->len);
+
+	tb->buff = malloc ( tb->len );
+
+	assert (tb->buff != NULL);
+
+	struct HEADER h;
+	h.opcode = src->opcode;
+	h.mask = 1;
+	h.fin = 1;
+	if (header_size == 2) {
+		h.payload_len = src->len;
+	}
+	else {
+		/* FIXME: */
+		abort ();
+	}
+
+	memcpy (tb->buff, (char*)&h, header_size);
+	size_t cur_i = header_size;
+	size_t i;
+	uint8_t masks[4] = {
+		mask >> 24,
+		(mask >> 16) & 0xFF,
+		(mask >> 8) & 0xFF,
+		mask & 0xFF,
+	};
+	tb->buff[cur_i++] = masks[0];
+	tb->buff[cur_i++] = masks[1];
+	tb->buff[cur_i++] = masks[2];
+	tb->buff[cur_i++] = masks[3];
+
+	for (i=0; i < src->len; ++i) {
+		/* ESP_LOGI ("ENC", "Cur i: %d; i = %d", cur_i, i); */
+		assert (cur_i < tb->len);
+		tb->buff[cur_i++] = src->buff[i] ^ masks[i%4];
+	}
+
+	ESP_LOG_BUFFER_HEXDUMP ("ENC", tb->buff, cur_i, ESP_LOG_INFO);
+
+	*res = tb;
+	return 0;
+}
+
 EventGroupHandle_t wss_event_group;
+QueueHandle_t tx_queue;
 
 #define TAG "WSS"
 
@@ -48,29 +114,12 @@ static const char *PARAMS_FORMAT =
 
 
 static TaskHandle_t xHandle = NULL;
-QueueHandle_t tx_queue;
 
 enum WebSocketState {
 	HTTP_HEADER = 0,
 	PAYLOAD_START,
 	PAYLOAD_DATA
 } cur_state;
-
-struct __attribute__((__packed__)) HEADER {
-
-	uint8_t opcode:4;
-	uint8_t rsv3:1;
-	uint8_t rsv2:1;
-	uint8_t rsv1:1;
-	uint8_t fin:1;
-
-	uint8_t payload_len:7;
-	uint8_t mask:1;
-
-	uint16_t len_ex;
-
-	/* uint64_t len_ex_ex; */
-};
 
 static int header_get_size (struct HEADER *h) {
 	if (h->payload_len <= 125)
@@ -338,7 +387,47 @@ static void gg_websockets_task (void *pvParameters) {
 			{
 				ESP_LOGI (TAG, "Read returned nothing..");
 
-				/* TODO: */
+				/* SECTION: check on tx_queue */
+				TxBuff tmp;
+				if (xQueueReceive (tx_queue, &tmp, 10 / portTICK_PERIOD_MS)) {
+					/* Got things to transmit */
+					ESP_LOGW(TAG, "-> %s", tmp.buff);
+
+					TxBuff *enc;
+					tx_buff_encapsulate (&enc, &tmp, esp_random ());
+
+					/* ESP_LOGW (TAG, "Enc len: %d; ENC: %p; ENC->buff: %p", */
+					/* 		  enc->len, */
+					/* 		  enc, enc->buff); */
+					/* size_t ti; */
+					/* for (ti=0; ti < enc->len; ++ti) { */
+					/* 	printf ("%02X", enc->buff[ti]); */
+					/* } */
+
+
+					written_bytes = 0;
+#if 0
+					do {
+						ret = mbedtls_ssl_write(
+							&ssl,
+							(const unsigned char *)enc->buff + written_bytes,
+							enc->len - written_bytes);
+						if (ret >= 0) {
+							ESP_LOGI(TAG, "%d bytes written", ret);
+							written_bytes += ret;
+						} else if (ret != MBEDTLS_ERR_SSL_WANT_WRITE &&
+								   ret != MBEDTLS_ERR_SSL_WANT_READ) {
+							ESP_LOGE(TAG, "mbedtls_ssl_write returned -0x%x", -ret);
+							goto exit;
+						}
+					} while(written_bytes < enc->len);
+#endif
+					/* free up stuff */
+					free (enc->buff);
+					free (enc);
+				}
+
+				continue;
 			}
 			else if(ret < 0)
 			{
@@ -375,8 +464,9 @@ static void gg_websockets_task (void *pvParameters) {
 						memcpy (&h, payload.data,
 								my_min (sizeof (struct HEADER), payload.ind));
 						int header_size = header_get_size (&h);
+						payload.data[payload.ind] = 0; /* Null terminate */
 						char *text = &payload.data[header_size];
-						ESP_LOGI (TAG, "Recv: %s", text);
+						ESP_LOGW (TAG, "<-- Recv: %s", text);
 
 						reset_buffer (&payload);
 						cur_state = PAYLOAD_START;
@@ -425,7 +515,7 @@ void gg_start_websockets () {
 	wss_event_group = xEventGroupCreate();
 
 	/* create a queue */
-	/* tx_queue = xQueueCreate( 10, sizeof(  ) ); */
+	tx_queue = xQueueCreate( 10, sizeof( TxBuff ) );
 
 	xTaskCreate(&gg_websockets_task, "wss_task", 8192, NULL, 5, &xHandle);
 
