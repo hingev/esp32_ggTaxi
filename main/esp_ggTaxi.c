@@ -145,7 +145,7 @@ void app_main()
 		/* display_state_set (SEARCHING); */
 #endif
 
-#if 0
+#if 1
 		gg_https_login ("", "");
 
 		gg_start_websockets ();

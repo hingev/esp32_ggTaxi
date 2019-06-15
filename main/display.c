@@ -101,13 +101,12 @@ static void display_task (void *pvParameters) {
 		add_state (1, l2);
 
 		if (get_state (0) == PUSHED) {
-			puts ("HOLDING BUTTON 0");
+			/* TODO: */
+
 		}
 		if (get_state (1) == PUSHED) {
-			puts ("HOLDING BUTTON 1");
+			/* TODO: */
 		}
-
-		printf ("l1: %d; l2: %d\n", l1, l2);
 
 		res = xEventGroupWaitBits (display_event_group,
 								   0xFF,
@@ -134,7 +133,7 @@ static void display_task (void *pvParameters) {
 		switch (display_state) {
 		case IDLE:
 			if (sub_state == 0) {
-				printf ( "picking led");
+				/* printf ( "picking led"); */
 				r1 = esp_random () % LED_CNT;
 				memset (leds, 0, LED_CNT * sizeof (Color));
 				cur_led = r1;
@@ -143,7 +142,7 @@ static void display_task (void *pvParameters) {
 				step = 0;
 			}
 			else if (sub_state == 1) {
-				printf ( "Increaing /");
+				/* printf ( "Increaing /"); */
 				step ++;
 				leds[cur_led].r = step;
 				leds[cur_led].g = 0;
@@ -154,7 +153,7 @@ static void display_task (void *pvParameters) {
 				ws2812_send_colors (leds, LED_CNT);
 			}
 			else if (sub_state == 2) {
-				printf ( "decreaing /");
+				/* printf ( "decreaing /"); */
 				step -- ;
 				leds[cur_led].r = step;
 				leds[cur_led].g = 0;
@@ -190,7 +189,7 @@ static void display_task (void *pvParameters) {
 			break;
 		}
 
-		printf ( "###");
+		/* printf ( "###"); */
 		/* printf ("###\n"); */
 		/* vTaskDelay (30 / portTICK_PERIOD_MS); */
 	}

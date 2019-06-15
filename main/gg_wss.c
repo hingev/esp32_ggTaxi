@@ -44,106 +44,115 @@ static const char *PARAMS_FORMAT =
 	"token=%s&userId=%s&mode=%s&EIO=3&transport=websocket";
 
 
-static mbedtls_ssl_recv_t websocket_recv_cb ;
-
-static int net_would_block( const mbedtls_net_context *ctx )
-{
-    int err = errno;
-
-    /*
-     * Never return 'WOULD BLOCK' on a non-blocking socket
-     */
-    if( ( fcntl( ctx->fd, F_GETFL ) & O_NONBLOCK ) != O_NONBLOCK )
-    {
-        errno = err;
-        return( 0 );
-    }
-
-    switch( errno = err )
-    {
-#if defined EAGAIN
-        case EAGAIN:
-#endif
-#if defined EWOULDBLOCK && EWOULDBLOCK != EAGAIN
-        case EWOULDBLOCK:
-#endif
-            return( 1 );
-    }
-    return( 0 );
-}
-
-static 	mbedtls_ssl_context ssl;
-
-static int websocket_recv_cb (void *ctx,
-							  unsigned char *buf,
-							  size_t len) {
-
-	printf ("State : %d\n", ssl.state);
-
-	if (ssl.state < MBEDTLS_SSL_HANDSHAKE_OVER) {
-		int ret;
-		int fd = ((mbedtls_net_context *) ctx)->fd;
-
-		if( fd < 0 )
-			return( MBEDTLS_ERR_NET_INVALID_CONTEXT );
-
-		ret = (int) read( fd, buf, len );
-
-		if( ret < 0 )
-		{
-			if( net_would_block( ctx ) != 0 )
-				return( MBEDTLS_ERR_SSL_WANT_READ );
-
-			if( errno == EPIPE || errno == ECONNRESET )
-				return( MBEDTLS_ERR_NET_CONN_RESET );
-
-			if( errno == EINTR )
-				return( MBEDTLS_ERR_SSL_WANT_READ );
-
-			return( MBEDTLS_ERR_NET_RECV_FAILED );
-		}
-
-		return( ret );
-	}
-
-	else {
-		int ret;
-		int fd = ((mbedtls_net_context *) ctx)->fd;
-
-		if( fd < 0 )
-			return( MBEDTLS_ERR_NET_INVALID_CONTEXT );
-
-		ret = (int) read( fd, buf, len );
-
-		if( ret < 0 )
-		{
-			if( net_would_block( ctx ) != 0 )
-				return( MBEDTLS_ERR_SSL_WANT_READ );
-
-			if( errno == EPIPE || errno == ECONNRESET )
-				return( MBEDTLS_ERR_NET_CONN_RESET );
-
-			if( errno == EINTR )
-				return( MBEDTLS_ERR_SSL_WANT_READ );
-
-			return( MBEDTLS_ERR_NET_RECV_FAILED );
-		}
-
-		printf ("READ %d bytes\n", ret);
-		return( ret );
-	}
-
-}
-
 static TaskHandle_t xHandle = NULL;
+
+enum WebSocketState {
+	HTTP_HEADER = 0,
+	PAYLOAD_START,
+	PAYLOAD_DATA
+} cur_state;
+
+struct __attribute__((__packed__)) HEADER {
+
+	uint8_t opcode:4;
+	uint8_t rsv3:1;
+	uint8_t rsv2:1;
+	uint8_t rsv1:1;
+	uint8_t fin:1;
+
+	uint8_t payload_len:7;
+	uint8_t mask:1;
+
+	uint16_t len_ex;
+
+	/* uint64_t len_ex_ex; */
+};
+
+static int header_get_size (struct HEADER *h) {
+	if (h->payload_len <= 125)
+		return 2;
+	else if (h->payload_len == 126)
+		return 4;
+	else if (h->payload_len == 127)
+		return 8;
+	else
+		abort ();
+	return -1;
+}
+
+struct BUFFER {
+	char * data;
+	ssize_t size;
+	ssize_t ind;
+};
+typedef struct BUFFER Buffer;
+
+#define my_min(A,B)	( (A)>(B) ? (B) : (A) )
+
+static void add_to_buffer (Buffer *b, char *add, int len) {
+	if (b->data == NULL) {
+		b->size = 2048;
+		b->data = calloc (b->size, sizeof (char));
+	}
+	if (b->size < b->ind + len) {
+		int new_size = b->size;
+		while (new_size < b->ind + len) {
+			new_size *= 2;
+			assert (new_size < 16384);
+		}
+
+		b->data = realloc (b->data, new_size);
+		b->size = new_size;
+	}
+
+	memcpy (&b->data[b->ind], add, len);
+	b->ind += len;
+}
+
+static void reset_buffer (Buffer *b) {
+	b->ind = 0;
+}
+
+static int parse_payload (Buffer *b) {
+	if (b->ind < 2)
+		return -1;
+
+	struct HEADER h;
+	memcpy (&h, b->data, my_min (sizeof (struct HEADER), b->ind));
+
+	/* printf ("Payload len: %02X; ind: %02X\n", h.payload_len, b->ind); */
+
+	if (h.payload_len <= 125) {
+		if (h.payload_len + 2 == b->ind) {
+			/* package is complete */
+			return 0;
+		}
+		/* FIXME: what if more bytes are left from the next package !! */
+		abort ();
+	}
+	if (h.payload_len > 125) {
+		if (h.payload_len + 4 < b->ind)
+			return 1;
+		if (h.payload_len + 4 == b->ind)
+			return 0;
+		/* FIXME: same fixme as above */
+		abort ();
+	}
+
+	return 1;
+}
 
 static void gg_websockets_task (void *pvParameters) {
 
 	ESP_LOGI(TAG, "Trying to Start the WSS..");
 
 	char buf[1024];
+
+	Buffer payload = {0};
+
 	int ret, flags, len;
 
+	mbedtls_ssl_context ssl;
 	mbedtls_entropy_context entropy;
 	mbedtls_ctr_drbg_context ctr_drbg;
 
@@ -249,9 +258,7 @@ static void gg_websockets_task (void *pvParameters) {
 		ESP_LOGI(TAG, "Connected.");
 
 		mbedtls_ssl_set_bio(&ssl, &server_fd, mbedtls_net_send,
-							websocket_recv_cb
-							/* mbedtls_net_recv */
-							, NULL);
+							mbedtls_net_recv, NULL);
 
 		ESP_LOGI(TAG, "Performing the SSL/TLS handshake...");
 
@@ -325,12 +332,42 @@ static void gg_websockets_task (void *pvParameters) {
 			}
 
 			len = ret;
+
 			ESP_LOGD(TAG, "%d bytes read", len);
 			/* Print response directly to stdout as it is read */
 			for(int i = 0; i < len; i++) {
-				putchar(buf[i]);
+				printf ("%02X", buf[i]);
+				/* putchar(buf[i]); */
 			}
 			putchar ('\n');
+
+			if (cur_state == HTTP_HEADER) {
+				ESP_LOGI (TAG, "HTTP header found!");
+				if (strstr (buf, "\r\n\r\n") != NULL) {
+					cur_state = PAYLOAD_START;
+					continue;
+				}
+			}
+			if (cur_state == PAYLOAD_START) {
+				ESP_LOGI (TAG, "got payload start: ");
+				add_to_buffer (&payload, buf, len);
+
+				if (parse_payload (&payload) == 0) {
+					/* if the frame was fully received- */
+					/* SECTION: handle the package */
+					struct HEADER h;
+					memcpy (&h, payload.data,
+							my_min (sizeof (struct HEADER), payload.ind));
+					int header_size = header_get_size (&h);
+					char *text = &payload.data[header_size];
+					ESP_LOGI (TAG, "Recv: %s", text);
+
+					reset_buffer (&payload);
+					cur_state = PAYLOAD_START;
+				} else {
+					cur_state = PAYLOAD_DATA;
+				}
+			}
 
 			/* TODO: */
 
