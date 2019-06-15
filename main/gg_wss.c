@@ -173,6 +173,9 @@ static int parse_payload (Buffer *b) {
 	struct HEADER h;
 	memcpy (&h, b->data, my_min (sizeof (struct HEADER), b->ind));
 
+	h.len_ex = htons (h.len_ex);
+
+	ESP_LOGW ("PARSE", "Payload len :%02X, len_ex: %04X", h.payload_len, h.len_ex);
 	/* printf ("Payload len: %02X; ind: %02X\n", h.payload_len, b->ind); */
 
 	if (h.payload_len <= 125) {
@@ -183,10 +186,10 @@ static int parse_payload (Buffer *b) {
 		/* FIXME: what if more bytes are left from the next package !! */
 		abort ();
 	}
-	if (h.payload_len > 125) {
-		if (h.payload_len + 4 < b->ind)
+	if (h.payload_len == 126) {
+		if (h.len_ex + 4 < b->ind)
 			return 1;
-		if (h.payload_len + 4 == b->ind)
+		if (h.len_ex + 4 == b->ind)
 			return 0;
 		/* FIXME: same fixme as above */
 		abort ();

@@ -145,16 +145,14 @@ void app_main()
 	/* SECTION: create the button queue */
 	button_queue = xQueueCreate ( 5, sizeof (enum BUTTON_EVENT));
 
-	TxBuff nearby = {0, 0, 0x1};
-	nearby.len = asprintf (
-		&nearby.buff,
-		"420[\"get\", {\"data\": {\"lat\": %s, \"lng\": %s}, \"url\": \"/v1/socket/nearbyDrivers\"}]\"",
-		"40.18130824113917",	/* random location for tests */
-		"44.52259207196653");
+	TxBuff profiles = {0, 0, 0x1};
+	profiles.len = asprintf (
+		&profiles.buff,
+		"420[\"get\",{\"data\":{\"lat\":40.18607344547277,\"lng\":44.52450749355148},\"url\":\"/v1/socket/profiles\"}]");
 
 #if 0
 	TxBuff *enc;
-	tx_buff_encapsulate (&enc, &nearby, esp_random ());
+	tx_buff_encapsulate (&enc, &profiles, esp_random ());
 
 	ESP_LOGW ("ENCAP", "Enc len: %d; ENC: %p; ENC->buff: %p",
 			  enc->len,
@@ -201,6 +199,8 @@ void app_main()
 
 				cur_state = NONE;
 
+				/* send request for the profiles drivers */
+				xQueueSend (tx_queue, &profiles, (TickType_t) 0);
 			}
 			break;
 		case NONE:
@@ -210,9 +210,6 @@ void app_main()
 				ESP_LOGI ("MAIN", "Button %d was pressed!", be);
 				if (be == BUT_EV_1) {
 					/* TODO: send the order */
-
-					/* send request for the nearby drivers */
-					xQueueSend (tx_queue, &nearby, (TickType_t) 0);
 
 				}
 			} else {
