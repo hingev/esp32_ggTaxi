@@ -45,6 +45,7 @@ static const char *PARAMS_FORMAT =
 
 
 static TaskHandle_t xHandle = NULL;
+QueueHandle_t tx_queue;
 
 enum WebSocketState {
 	HTTP_HEADER = 0,
@@ -214,9 +215,14 @@ static void gg_websockets_task (void *pvParameters) {
 	mbedtls_ssl_conf_authmode(&conf, MBEDTLS_SSL_VERIFY_OPTIONAL);
 	mbedtls_ssl_conf_ca_chain(&conf, &cacert, NULL);
 	mbedtls_ssl_conf_rng(&conf, mbedtls_ctr_drbg_random, &ctr_drbg);
+	/* FIXME: certificate negotiation sometimes gives timeout */
+	mbedtls_ssl_conf_read_timeout (&conf, 900);
+
+
 #ifdef CONFIG_MBEDTLS_DEBUG
 	mbedtls_esp_enable_debug_log(&conf, 4);
 #endif
+
 
 	if ((ret = mbedtls_ssl_setup(&ssl, &conf)) != 0)
 	{
@@ -258,7 +264,7 @@ static void gg_websockets_task (void *pvParameters) {
 		ESP_LOGI(TAG, "Connected.");
 
 		mbedtls_ssl_set_bio(&ssl, &server_fd, mbedtls_net_send,
-							mbedtls_net_recv, NULL);
+							NULL, mbedtls_net_recv_timeout);
 
 		ESP_LOGI(TAG, "Performing the SSL/TLS handshake...");
 
@@ -319,57 +325,62 @@ static void gg_websockets_task (void *pvParameters) {
 				break;
 			}
 
-			if(ret < 0)
+			if (ret == 0) {
+				ESP_LOGI(TAG, "connection closed");
+				break;
+			}
+
+			if(ret == MBEDTLS_ERR_SSL_TIMEOUT)
+			{
+				ESP_LOGI (TAG, "Read returned nothing..");
+
+				/* TODO: */
+			}
+			else if(ret < 0)
 			{
 				ESP_LOGE(TAG, "mbedtls_ssl_read returned -0x%x", -ret);
 				break;
 			}
 
-			if(ret == 0)
-			{
-				ESP_LOGI(TAG, "connection closed");
-				break;
-			}
+			else {
+				len = ret;
 
-			len = ret;
+				ESP_LOGD(TAG, "%d bytes read", len);
+				/* Print response directly to stdout as it is read */
+				for(int i = 0; i < len; i++) {
+					printf ("%02X", buf[i]);
+					/* putchar(buf[i]); */
+				}
+				putchar ('\n');
 
-			ESP_LOGD(TAG, "%d bytes read", len);
-			/* Print response directly to stdout as it is read */
-			for(int i = 0; i < len; i++) {
-				printf ("%02X", buf[i]);
-				/* putchar(buf[i]); */
-			}
-			putchar ('\n');
+				if (cur_state == HTTP_HEADER) {
+					ESP_LOGI (TAG, "HTTP header found!");
+					if (strstr (buf, "\r\n\r\n") != NULL) {
+						cur_state = PAYLOAD_START;
+						continue;
+					}
+				}
+				if (cur_state == PAYLOAD_START) {
+					ESP_LOGI (TAG, "got payload start: ");
+					add_to_buffer (&payload, buf, len);
 
-			if (cur_state == HTTP_HEADER) {
-				ESP_LOGI (TAG, "HTTP header found!");
-				if (strstr (buf, "\r\n\r\n") != NULL) {
-					cur_state = PAYLOAD_START;
-					continue;
+					if (parse_payload (&payload) == 0) {
+						/* if the frame was fully received- */
+						/* SECTION: handle the package */
+						struct HEADER h;
+						memcpy (&h, payload.data,
+								my_min (sizeof (struct HEADER), payload.ind));
+						int header_size = header_get_size (&h);
+						char *text = &payload.data[header_size];
+						ESP_LOGI (TAG, "Recv: %s", text);
+
+						reset_buffer (&payload);
+						cur_state = PAYLOAD_START;
+					} else {
+						cur_state = PAYLOAD_DATA;
+					}
 				}
 			}
-			if (cur_state == PAYLOAD_START) {
-				ESP_LOGI (TAG, "got payload start: ");
-				add_to_buffer (&payload, buf, len);
-
-				if (parse_payload (&payload) == 0) {
-					/* if the frame was fully received- */
-					/* SECTION: handle the package */
-					struct HEADER h;
-					memcpy (&h, payload.data,
-							my_min (sizeof (struct HEADER), payload.ind));
-					int header_size = header_get_size (&h);
-					char *text = &payload.data[header_size];
-					ESP_LOGI (TAG, "Recv: %s", text);
-
-					reset_buffer (&payload);
-					cur_state = PAYLOAD_START;
-				} else {
-					cur_state = PAYLOAD_DATA;
-				}
-			}
-
-			/* TODO: */
 
 		} while(1);
 
@@ -405,6 +416,9 @@ static void gg_websockets_task (void *pvParameters) {
 
 
 void gg_start_websockets () {
+
+	/* create a queue */
+	/* tx_queue = xQueueCreate( 10, sizeof(  ) ); */
 
 	xTaskCreate(&gg_websockets_task, "wss_task", 8192, NULL, 5, &xHandle);
 

@@ -21,11 +21,15 @@
 #include "esp_log.h"
 
 /* My include files */
+#include "common.h"
 #include "gg_https.h"
 #include "gg_wss.h"
 
 #include "ws2812.h"
 #include "display.h"
+
+/* used for display_task -> main_task */
+QueueHandle_t button_queue;
 
 /* FreeRTOS event group to signal when we are connected*/
 static EventGroupHandle_t s_wifi_event_group;
@@ -107,68 +111,59 @@ void app_main()
     ESP_ERROR_CHECK(ret);
 
 
-		wifi_init_sta ();
-
     /* Print chip information */
     esp_chip_info_t chip_info;
     esp_chip_info(&chip_info);
     printf("This is ESP32 chip with %d CPU cores, WiFi%s%s, ",
-            chip_info.cores,
-            (chip_info.features & CHIP_FEATURE_BT) ? "/BT" : "",
-            (chip_info.features & CHIP_FEATURE_BLE) ? "/BLE" : "");
+		   chip_info.cores,
+		   (chip_info.features & CHIP_FEATURE_BT) ? "/BT" : "",
+		   (chip_info.features & CHIP_FEATURE_BLE) ? "/BLE" : "");
 
     printf("silicon revision %d, ", chip_info.revision);
 
     printf("%dMB %s flash\n", spi_flash_get_chip_size() / (1024 * 1024),
-            (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
+		   (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
 
 
-		/* Wait for the WiFi connection */
-		while ((xEventGroupWaitBits (s_wifi_event_group,
-																 WIFI_CONNECTED_BIT,
-																 pdFALSE,
-																 pdFALSE,
-																 10 / portTICK_PERIOD_MS) \
-						& WIFI_CONNECTED_BIT) == 0) {
-        /* printf("waiting for connection...\n"); */
-				/* fflush (stdout); */
-		}
+	/* Init WiFi as a station */
+	wifi_init_sta ();
 
+	/* Wait for the WiFi connection */
+	while ((xEventGroupWaitBits (s_wifi_event_group,
+								 WIFI_CONNECTED_BIT,
+								 pdFALSE,
+								 pdFALSE,
+								 10 / portTICK_PERIOD_MS) \
+			& WIFI_CONNECTED_BIT) == 0) {
+		/* printf("waiting for connection...\n"); */
+		/* fflush (stdout); */
+	}
 
-		ws2812_init_spi ();
+	/* Hardware init stuff */
+	ws2812_init_spi ();
 
-#if 1
-		display_task_start ();
-
-		/* vTaskDelay (5000 / portTICK_PERIOD_MS); */
-
-		/* display_state_set (SEARCHING); */
-#endif
+	/* SECTION: create the button queue */
+	button_queue = xQueueCreate ( 5, sizeof (enum BUTTON_EVENT));
 
 #if 1
-		gg_https_login ("", "");
+	display_task_start ();
 
-		gg_start_websockets ();
+	gg_https_login ("", "");
+
+	gg_start_websockets ();
 #endif
 
-#if 0
-		Color cs[3] = { {0xaa, 0xaa, 0xaa}, {0, 255, 0}, {0,0,255} };
 
+	/* TODO:  */
+	/* wait for the WSS socket open flag */
 
-		int i;
-		for (; ;) {
-			ws2812_send_colors ((Color*)&cs, 1);
-			vTaskDelay (20 / portTICK_PERIOD_MS);
-			/* cs[0].r ^= 0xff; */
-			/* Color t = cs[0]; */
-			/* cs[0] = cs[1]; */
-			/* cs[1] = cs[2]; */
-			/* cs[2] = t; */
-			/* cs[0].r ++; */
-			/* cs[1].g ++; */
-			/* cs[2].b ++; */
+	while (1) {
+		enum BUTTON_EVENT be;
+		if (xQueueReceive( button_queue, &( be ), ( TickType_t ) portMAX_DELAY )) {
+			/* button pressed */
+			ESP_LOGI ("MAIN", "Button %d was pressed!", be);
 		}
-#endif
+	}
 
     for (; ; ) {
         printf("...\n");

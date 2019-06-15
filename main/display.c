@@ -14,6 +14,7 @@
 #include "esp_log.h"
 #include "driver/gpio.h"
 
+#include "common.h"
 #include "ws2812.h"
 #include "display.h"
 
@@ -101,11 +102,12 @@ static void display_task (void *pvParameters) {
 		add_state (1, l2);
 
 		if (get_state (0) == PUSHED) {
-			/* TODO: */
-
+			enum BUTTON_EVENT be = BUT_EV_1;
+			xQueueSend (button_queue, &be, portMAX_DELAY);
 		}
 		if (get_state (1) == PUSHED) {
-			/* TODO: */
+			enum BUTTON_EVENT be = BUT_EV_2;
+			xQueueSend (button_queue, &be, portMAX_DELAY);
 		}
 
 		res = xEventGroupWaitBits (display_event_group,

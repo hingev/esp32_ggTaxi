@@ -64,7 +64,7 @@ const char *CONTENT_FORMAT =									\
 
 
 int gg_https_login (char * mobile,
-										char *password) {
+					char *password) {
 
 	ESP_LOGI(TAG, "Trying to do HTTPS login..");
 
