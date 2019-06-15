@@ -19,7 +19,10 @@
 #include "esp_tls.h"
 
 /* My includes */
+#include "common.h"
 #include "session.h"
+
+EventGroupHandle_t wss_event_group;
 
 #define TAG "WSS"
 
@@ -309,7 +312,8 @@ static void gg_websockets_task (void *pvParameters) {
 			}
 		} while(written_bytes < strlen(REQUEST));
 
-		ESP_LOGI(TAG, "Reading HTTP response...");
+		ESP_LOGI(TAG, "Reading response...");
+		xEventGroupSetBits (wss_event_group, WSS_CONNECTED);
 
 		do
 		{
@@ -416,6 +420,9 @@ static void gg_websockets_task (void *pvParameters) {
 
 
 void gg_start_websockets () {
+
+	/* create the event group */
+	wss_event_group = xEventGroupCreate();
 
 	/* create a queue */
 	/* tx_queue = xQueueCreate( 10, sizeof(  ) ); */

@@ -157,11 +157,29 @@ void app_main()
 	/* TODO:  */
 	/* wait for the WSS socket open flag */
 
+	enum { WAITING_FOR_WSS, NONE, ORDER_SENT, } cur_state = WAITING_FOR_WSS;
+	enum BUTTON_EVENT be;
+
 	while (1) {
-		enum BUTTON_EVENT be;
-		if (xQueueReceive( button_queue, &( be ), ( TickType_t ) portMAX_DELAY )) {
-			/* button pressed */
-			ESP_LOGI ("MAIN", "Button %d was pressed!", be);
+		switch (cur_state) {
+		case WAITING_FOR_WSS:
+			if ((xEventGroupWaitBits (wss_event_group,
+									  WSS_CONNECTED,
+									  pdFALSE,
+									  pdFALSE,
+									  portMAX_DELAY)) == WSS_CONNECTED) {
+				xQueueReset (button_queue);
+				cur_state = NONE;
+			}
+			break;
+		case NONE:
+			if (xQueueReceive( button_queue, &( be ), ( TickType_t ) portMAX_DELAY )) {
+				/* button pressed */
+				ESP_LOGI ("MAIN", "Button %d was pressed!", be);
+			}
+			break;
+		default:
+			break;
 		}
 	}
 

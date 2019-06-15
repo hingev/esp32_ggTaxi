@@ -6,4 +6,7 @@ enum BUTTON_EVENT {
 	BUT_EV_1, BUT_EV_2
 };
 
+extern EventGroupHandle_t wss_event_group;
+#define WSS_CONNECTED			BIT1
+
 #endif
