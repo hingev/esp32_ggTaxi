@@ -185,7 +185,7 @@ void app_main()
 	enum { WAITING_FOR_WSS, NONE, ORDER_SENT, } cur_state = WAITING_FOR_WSS;
 	enum BUTTON_EVENT be;
 
-	TxBuff pong = {"2", 1, 0x09};
+	TxBuff pong = {"2", 1, 0x01};
 
 	while (1) {
 		switch (cur_state) {

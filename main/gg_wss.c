@@ -49,7 +49,7 @@ int tx_buff_encapsulate (TxBuff **res, TxBuff *src, uint32_t mask) {
 
 	assert (tb->buff != NULL);
 
-	struct HEADER h;
+	struct HEADER h = {0};
 	h.opcode = src->opcode;
 	h.mask = 1;
 	h.fin = 1;
@@ -406,7 +406,7 @@ static void gg_websockets_task (void *pvParameters) {
 
 
 					written_bytes = 0;
-#if 0
+#if 1
 					do {
 						ret = mbedtls_ssl_write(
 							&ssl,
