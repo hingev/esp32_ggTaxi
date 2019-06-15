@@ -12,16 +12,73 @@
 #include "lwip/err.h"
 #include "lwip/sys.h"
 #include "esp_log.h"
+#include "driver/gpio.h"
 
 #include "ws2812.h"
 #include "display.h"
 
 #define LED_CNT								16
 
+#define BUT_1				23
+#define BUT_2				22
+
+enum BUTTON_STATES {
+	NOT_PUSHED, MAYBE_PUSHED, PUSHED,
+	HOLD, MAYBE_REL
+} ;
+static enum BUTTON_STATES states [2] ;
+
+static void add_state (int pin, int value) {
+
+	value = ! (value);
+
+	switch (states [pin]) {
+	case NOT_PUSHED:
+		if (value)
+			states[pin] = MAYBE_PUSHED;
+		break;
+	case MAYBE_PUSHED:
+		if (value)
+			states[pin] = PUSHED;
+		else
+			states[pin] = NOT_PUSHED;
+		break;
+	case PUSHED:
+		if (value)
+			states[pin] = HOLD;
+		else
+			states[pin] = MAYBE_PUSHED;
+		break;
+	case HOLD:
+		if (! value)
+			states[pin] = MAYBE_REL;
+		break;
+	case MAYBE_REL:
+		if (! value)
+			states[pin] = NOT_PUSHED;
+		break;
+	default :
+		break;
+	}
+}
+
+static int get_state (int pin) {
+	return states[pin];
+}
+
 static TaskHandle_t xHandle = NULL;
 static EventGroupHandle_t display_event_group;
 
 static void display_task (void *pvParameters) {
+
+	/* initialize the button inputs */
+	gpio_config_t io_conf;
+    io_conf.intr_type = GPIO_PIN_INTR_DISABLE;
+    io_conf.mode = GPIO_MODE_INPUT;
+    io_conf.pin_bit_mask = (1ULL << BUT_1) | (1ULL << BUT_2);
+    io_conf.pull_down_en = 0;
+    io_conf.pull_up_en = 1;
+    gpio_config(&io_conf);
 
 	Color *leds = malloc (LED_CNT * sizeof (Color) );
 
@@ -37,6 +94,20 @@ static void display_task (void *pvParameters) {
 
 	while (1) {
 		/* check the event group bits */
+
+		int l1 = gpio_get_level (BUT_1);
+		int l2 = gpio_get_level (BUT_2);
+		add_state (0, l1);
+		add_state (1, l2);
+
+		if (get_state (0) == PUSHED) {
+			puts ("HOLDING BUTTON 0");
+		}
+		if (get_state (1) == PUSHED) {
+			puts ("HOLDING BUTTON 1");
+		}
+
+		printf ("l1: %d; l2: %d\n", l1, l2);
 
 		res = xEventGroupWaitBits (display_event_group,
 								   0xFF,
@@ -102,11 +173,11 @@ static void display_task (void *pvParameters) {
 			}
 			else if (sub_state == 1) {
 				for (i=0; i < LED_CNT; ++i) {
-					leds[i].g *= 0.8;
+					leds[i].b *= 0.85;
 				}
-				leds[cur_led].g = step;
+				leds[cur_led].b = step;
 				step += 75;
-				if (step > 255) {
+				if (step > 200) {
 					cur_led ++;
 					if (cur_led >= LED_CNT)
 						cur_led = 0;
