@@ -61,7 +61,41 @@ end:
 
 }
 
-void create_order_handler (int msg_id, char *json_s) {
+int get_profiles_handler (int msg_id, char *json_s) {
+	int res = 0;
+	cJSON *json = cJSON_Parse(json_s);
+	if (json == NULL) {
+		const char *error_ptr = cJSON_GetErrorPtr();
+		ESP_LOGE (__FUNCTION__, "Error in json parsing: %s", error_ptr);
+		goto end;
+	}
+
+	assert (cJSON_IsArray (json) == true);
+	cJSON *obj = cJSON_GetArrayItem (json, 0);
+	assert (cJSON_IsObject (obj) == true);
+
+	cJSON *results = cJSON_GetObjectItemCaseSensitive (obj, "results");
+	assert (cJSON_IsArray (results) == true);
+
+	cJSON *profile = NULL;
+	cJSON_ArrayForEach(profile, results)
+    {
+        cJSON *default_prof = cJSON_GetObjectItemCaseSensitive(profile, "default");
+
+		if (cJSON_IsBool (default_prof) && cJSON_IsTrue (default_prof)) {
+			/* SECTION: get the payment_id and profile_id  */
+
+		}
+    }
+
+
+end:
+	cJSON_Delete(json);
+	return res;
+}
+
+int create_order_handler (int msg_id, char *json_s) {
+	int res = 0;
 	ESP_LOGI (__FUNCTION__, "ID: %d; BUFF: %s", msg_id, json_s);
 	cJSON *json = cJSON_Parse(json_s);
 	if (json == NULL) {
@@ -91,4 +125,5 @@ void create_order_handler (int msg_id, char *json_s) {
 
 end:
 	cJSON_Delete(json);
+	return res;
 }
