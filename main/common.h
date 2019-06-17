@@ -29,7 +29,7 @@ struct __attribute__((__packed__)) HEADER {
 	uint8_t payload_len:7;
 	uint8_t mask:1;
 
-	uint16_t len_ex;
+	uint16_t len_ex;			/* endianness is different */
 
 	/* uint64_t len_ex_ex; */
 };

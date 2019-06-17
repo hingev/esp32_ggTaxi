@@ -145,28 +145,6 @@ void app_main()
 	/* SECTION: create the button queue */
 	button_queue = xQueueCreate ( 5, sizeof (enum BUTTON_EVENT));
 
-	TxBuff profiles = {0, 0, 0x1};
-	profiles.len = asprintf (
-		&profiles.buff,
-		"420[\"get\",{\"data\":{\"lat\":40.18607344547277,\"lng\":44.52450749355148},\"url\":\"/v1/socket/profiles\"}]");
-
-#if 0
-	TxBuff *enc;
-	tx_buff_encapsulate (&enc, &profiles, esp_random ());
-
-	ESP_LOGW ("ENCAP", "Enc len: %d; ENC: %p; ENC->buff: %p",
-			  enc->len,
-			  enc, enc->buff);
-
-	size_t ti;
-	for (ti=0; ti < enc->len; ++ti) {
-		printf ("%02X", enc->buff[ti]);
-	}
-
-	while (1) {
-
-	}
-#endif
 
 #if 1
 	display_task_start ();
@@ -184,6 +162,18 @@ void app_main()
 	enum BUTTON_EVENT be;
 
 	TxBuff pong = {"2", 1, 0x01};
+	TxBuff profiles = {0, 0, 0x1};
+	profiles.len = asprintf (
+		&profiles.buff,
+		"420[\"get\",{\"data\":{\"lat\":" CONFIG_HOME_LAT ",\"lng\":"CONFIG_HOME_LNG"},\"url\":\"/v1/socket/profiles\"}]");
+	TxBuff nearby = {NULL, 0, 0x01};
+	nearby.len = asprintf (
+		&nearby.buff,
+		"422[\"get\",{\"data\":{\"lat\":" CONFIG_HOME_LAT  ",\"lng\":" CONFIG_HOME_LNG "},\"url\":\"/v1/socket/nearbyDrivers\"}]");
+	TxBuff create_order = {NULL, 0, 0x01};
+	create_order.len = asprintf (
+		&create_order.buff,
+		"423[\"post\",{\"data\":{\"lat\":" CONFIG_HOME_LAT ",\"lng\": "CONFIG_HOME_LNG",\"address\":\"" CONFIG_HOME_ADDR "\",\"type\":11,\"country\":\"AM\"},\"url\":\"/v1/socket/createOrder\"}]");
 
 	while (1) {
 		switch (cur_state) {
@@ -211,6 +201,11 @@ void app_main()
 				if (be == BUT_EV_1) {
 					/* TODO: send the order */
 
+					xQueueSend (tx_queue, &nearby, (TickType_t) 0);
+				}
+				else if (be == BUT_EV_2) {
+
+					xQueueSend (tx_queue, &create_order, (TickType_t) 0);
 				}
 			} else {
 				/* send a pong */

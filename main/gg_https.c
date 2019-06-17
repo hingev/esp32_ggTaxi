@@ -212,6 +212,12 @@ int gg_https_login (char * mobile,
 
 			ESP_LOGI (TAG, "Status code: %d", status_code);
 
+			if (status_code == 400) {
+				/* TODO: parse to see if an error message pops up */
+
+				while (1) {}
+			}
+
 			assert (status_code == 200);
 
 			ESP_LOGI (TAG, "Got the auth tokens!");

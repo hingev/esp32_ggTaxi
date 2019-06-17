@@ -30,4 +30,22 @@ menu "Project configuration"
         help
             Your GG taxi account password.
 
+	config HOME_LAT
+        string "Home lat"
+        default ""
+        help
+			None
+
+	config HOME_LNG
+        string "Home lng"
+        default ""
+        help
+			None
+
+	config HOME_ADDR
+        string "Home address in text"
+        default ""
+        help
+			None
+
 endmenu

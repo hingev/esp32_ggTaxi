@@ -10,6 +10,8 @@
 #include "nvs_flash.h"
 #include "tcpip_adapter.h"
 
+#include <endian.h>
+
 #include "lwip/err.h"
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
@@ -55,6 +57,11 @@ int tx_buff_encapsulate (TxBuff **res, TxBuff *src, uint32_t mask) {
 	h.fin = 1;
 	if (header_size == 2) {
 		h.payload_len = src->len;
+	}
+	else if (header_size == 4) {
+		/* htole16 donesn't compile for some reason */
+		h.payload_len = 126;
+		h.len_ex = (0xFF & (src->len >> 8)) | ((src->len & 0xFF) << 8);
 	}
 	else {
 		/* FIXME: */

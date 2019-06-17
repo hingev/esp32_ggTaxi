@@ -42,7 +42,6 @@ char * data;
 void ws2812_send_colors (Color *c, uint8_t count) {
 	esp_err_t ret;
 
-	spi_transaction_t *last_trans;
 	spi_transaction_t t;
 	size_t color_len = (24 * 4 / 8 * count) + 1;
 
