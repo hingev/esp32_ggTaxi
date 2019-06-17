@@ -201,7 +201,9 @@ void app_main()
 				if (tmp[1] == '2') {
 					/* 42 is the status */
 					/* e.g. ["status",{"orders":[],"notifications":[]} */
-					/* TODO: add parsing */
+					char *json_s = &tmp[strspn (tmp, "01234567879")];
+
+					status_update_handler (json_s);
 				}
 			}
 			else if (tmp[0] == '0') {
