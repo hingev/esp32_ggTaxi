@@ -7,6 +7,7 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 #include <stdio.h>
+#include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_system.h"
@@ -20,6 +21,8 @@
 #include "lwip/sys.h"
 #include "esp_log.h"
 
+
+
 /* My include files */
 #include "common.h"
 #include "gg_https.h"
@@ -27,6 +30,8 @@
 
 #include "ws2812.h"
 #include "display.h"
+
+#include "handlers.h"
 
 /* used for display_task -> main_task */
 QueueHandle_t button_queue;
@@ -100,6 +105,7 @@ void wifi_init_sta()
 }
 
 
+
 void app_main()
 {
     //Initialize NVS
@@ -145,7 +151,6 @@ void app_main()
 	/* SECTION: create the button queue */
 	button_queue = xQueueCreate ( 5, sizeof (enum BUTTON_EVENT));
 
-
 #if 1
 	display_task_start ();
 
@@ -180,6 +185,28 @@ void app_main()
 		if (xQueueReceive (rx_queue, &rx, 10 / portTICK_PERIOD_MS)) {
 
 			ESP_LOGW ("MAIN", "<-- Recv: %s", rx.buff);
+
+			char *tmp = rx.buff;
+
+			if (tmp[0] == '4') {
+				if (tmp[1] == '3') {
+					/* next comes the message id */
+					int msg_id = atoi (&tmp[2]);
+					char *json_s = &tmp[strspn (tmp, "01234567879")];
+
+					if (msg_id == create_order.msg_id) {
+						create_order_handler (msg_id, json_s);
+					}
+				}
+				if (tmp[1] == '2') {
+					/* 42 is the status */
+					/* e.g. ["status",{"orders":[],"notifications":[]} */
+					/* TODO: add parsing */
+				}
+			}
+			else if (tmp[0] == '0') {
+				/* TODO: parsing */
+			}
 
 
 			free (rx.buff);
