@@ -205,9 +205,14 @@ static int parse_payload (Buffer *b) {
 	return 1;
 }
 
+static TxBuff pong = {"2", 1, 0x01};
+
 static void gg_websockets_task (void *pvParameters) {
 
 	ESP_LOGI(TAG, "Trying to Start the WSS..");
+
+#define TX_TIMER_MAX_CNT	10
+	size_t tx_timer = 0; 			/* used for ping/pong counting */
 
 	char buf[1024];
 
@@ -435,6 +440,13 @@ static void gg_websockets_task (void *pvParameters) {
 					/* free up stuff */
 					free (enc->buff);
 					free (enc);
+				}
+				else {
+					tx_timer ++;
+					if (tx_timer > TX_TIMER_MAX_CNT) {
+						tx_timer = 0;
+						xQueueSend (tx_queue, &pong, (TickType_t) 0);
+					}
 				}
 
 				continue;

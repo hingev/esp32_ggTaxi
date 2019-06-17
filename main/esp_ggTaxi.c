@@ -161,7 +161,6 @@ void app_main()
 	enum { WAITING_FOR_WSS, NONE, ORDER_SENT, } cur_state = WAITING_FOR_WSS;
 	enum BUTTON_EVENT be;
 
-	TxBuff pong = {"2", 1, 0x01};
 	TxBuff profiles = {0, 0, 0x1};
 	profiles.len = asprintf (
 		&profiles.buff,
@@ -207,9 +206,6 @@ void app_main()
 
 					xQueueSend (tx_queue, &create_order, (TickType_t) 0);
 				}
-			} else {
-				/* send a pong */
-				xQueueSend (tx_queue, &pong, (TickType_t) 0);
 			}
 			break;
 		default:
