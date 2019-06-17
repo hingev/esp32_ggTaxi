@@ -10,11 +10,14 @@ extern EventGroupHandle_t wss_event_group;
 #define WSS_CONNECTED			BIT1
 
 extern QueueHandle_t tx_queue;
+extern QueueHandle_t rx_queue;
 struct TX_BUFF {
 	char *buff;
 	int len;
 	/* encap settings .. */
 	int opcode;
+	int msg_id; 				/* used by the gg protocol */
+	/* if msg_id is 0 the package is not re-packaged */
 };
 typedef struct TX_BUFF TxBuff;
 int tx_buff_encapsulate (TxBuff **res, TxBuff *src, uint32_t mask);
@@ -33,6 +36,5 @@ struct __attribute__((__packed__)) HEADER {
 
 	/* uint64_t len_ex_ex; */
 };
-
 
 #endif

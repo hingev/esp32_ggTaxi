@@ -161,27 +161,38 @@ void app_main()
 	enum { WAITING_FOR_WSS, NONE, ORDER_SENT, } cur_state = WAITING_FOR_WSS;
 	enum BUTTON_EVENT be;
 
-	TxBuff profiles = {0, 0, 0x1};
+	TxBuff profiles = {0, 0, 0x1, 1};
 	profiles.len = asprintf (
 		&profiles.buff,
-		"420[\"get\",{\"data\":{\"lat\":" CONFIG_HOME_LAT ",\"lng\":"CONFIG_HOME_LNG"},\"url\":\"/v1/socket/profiles\"}]");
-	TxBuff nearby = {NULL, 0, 0x01};
+		"[\"get\",{\"data\":{\"lat\":" CONFIG_HOME_LAT ",\"lng\":"CONFIG_HOME_LNG"},\"url\":\"/v1/socket/profiles\"}]");
+	TxBuff nearby = {NULL, 0, 0x01, 2};
 	nearby.len = asprintf (
 		&nearby.buff,
-		"422[\"get\",{\"data\":{\"lat\":" CONFIG_HOME_LAT  ",\"lng\":" CONFIG_HOME_LNG "},\"url\":\"/v1/socket/nearbyDrivers\"}]");
-	TxBuff create_order = {NULL, 0, 0x01};
+		"[\"get\",{\"data\":{\"lat\":" CONFIG_HOME_LAT  ",\"lng\":" CONFIG_HOME_LNG "},\"url\":\"/v1/socket/nearbyDrivers\"}]");
+	TxBuff create_order = {NULL, 0, 0x01, 3};
 	create_order.len = asprintf (
 		&create_order.buff,
-		"423[\"post\",{\"data\":{\"lat\":" CONFIG_HOME_LAT ",\"lng\": "CONFIG_HOME_LNG",\"address\":\"" CONFIG_HOME_ADDR "\",\"type\":11,\"country\":\"AM\"},\"url\":\"/v1/socket/createOrder\"}]");
+		"[\"post\",{\"data\":{\"lat\":" CONFIG_HOME_LAT ",\"lng\": "CONFIG_HOME_LNG",\"address\":\"" CONFIG_HOME_ADDR "\",\"type\":11,\"country\":\"AM\"},\"url\":\"/v1/socket/createOrder\"}]");
 
 	while (1) {
+
+		TxBuff rx;
+		if (xQueueReceive (rx_queue, &rx, 10 / portTICK_PERIOD_MS)) {
+
+			ESP_LOGW ("MAIN", "<-- Recv: %s", rx.buff);
+
+
+			free (rx.buff);
+		}
+
+
 		switch (cur_state) {
 		case WAITING_FOR_WSS:
 			if ((xEventGroupWaitBits (wss_event_group,
 									  WSS_CONNECTED,
 									  pdFALSE,
 									  pdFALSE,
-									  portMAX_DELAY)) == WSS_CONNECTED) {
+									  10 / portTICK_PERIOD_MS)) == WSS_CONNECTED) {
 				xQueueReset (button_queue);
 
 
@@ -194,7 +205,7 @@ void app_main()
 			break;
 		case NONE:
 			if (xQueueReceive( button_queue, &( be ),
-							   ( TickType_t ) 10000 / portTICK_PERIOD_MS )) {
+							   ( TickType_t ) 10 / portTICK_PERIOD_MS )) {
 				/* button pressed */
 				ESP_LOGI ("MAIN", "Button %d was pressed!", be);
 				if (be == BUT_EV_1) {

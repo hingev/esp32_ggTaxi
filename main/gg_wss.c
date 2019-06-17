@@ -96,6 +96,7 @@ int tx_buff_encapsulate (TxBuff **res, TxBuff *src, uint32_t mask) {
 
 EventGroupHandle_t wss_event_group;
 QueueHandle_t tx_queue;
+QueueHandle_t rx_queue;
 
 #define TAG "WSS"
 
@@ -205,7 +206,7 @@ static int parse_payload (Buffer *b) {
 	return 1;
 }
 
-static TxBuff pong = {"2", 1, 0x01};
+static TxBuff pong = {"2", 1, 0x01, 0};
 
 static void gg_websockets_task (void *pvParameters) {
 
@@ -408,6 +409,17 @@ static void gg_websockets_task (void *pvParameters) {
 					/* Got things to transmit */
 					ESP_LOGW(TAG, "-> %s", tmp.buff);
 
+					if (tmp.msg_id) {
+						/* add the 42{msg_id} before the message */
+						tmp.len = asprintf (
+							&tmp.buff,
+							"42%d%s",
+							tmp.msg_id,
+							tmp.buff);
+
+						ESP_LOGI (TAG, "RECODED: ---> %s", tmp.buff);
+					}
+
 					TxBuff *enc;
 					tx_buff_encapsulate (&enc, &tmp, esp_random ());
 
@@ -438,6 +450,10 @@ static void gg_websockets_task (void *pvParameters) {
 					} while(written_bytes < enc->len);
 #endif
 					/* free up stuff */
+					if (tmp.msg_id) {
+						/* asprintf alloced a new buffer */
+						free (tmp.buff);
+					}
 					free (enc->buff);
 					free (enc);
 				}
@@ -488,7 +504,14 @@ static void gg_websockets_task (void *pvParameters) {
 						int header_size = header_get_size (&h);
 						payload.data[payload.ind] = 0; /* Null terminate */
 						char *text = &payload.data[header_size];
-						ESP_LOGW (TAG, "<-- Recv: %s", text);
+
+						TxBuff tmp = {0};
+						tmp.len = payload.ind - header_size;
+						tmp.buff = malloc (tmp.len + 1);
+						memcpy (tmp.buff, text, tmp.len);
+						tmp.buff[tmp.len] = 0;
+
+						xQueueSend (rx_queue, &tmp, (TickType_t) 0);
 
 						reset_buffer (&payload);
 						cur_state = PAYLOAD_START;
@@ -538,6 +561,7 @@ void gg_start_websockets () {
 
 	/* create a queue */
 	tx_queue = xQueueCreate( 10, sizeof( TxBuff ) );
+	rx_queue = xQueueCreate( 10, sizeof( TxBuff ) );
 
 	xTaskCreate(&gg_websockets_task, "wss_task", 8192, NULL, 5, &xHandle);
 
