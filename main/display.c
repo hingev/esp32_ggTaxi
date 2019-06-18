@@ -87,7 +87,7 @@ static void display_task (void *pvParameters) {
 
 	assert (leds != NULL);
 
-	int r1;
+	int r1 = 0;
 	int sub_state = 0;
 	int cur_led = 0;
 	int step = 0;
@@ -134,6 +134,7 @@ static void display_task (void *pvParameters) {
 			sub_state = 0;
 		}
 
+		int tmp = r1;
 		switch (display_state) {
 		case NONE:
 			if (sub_state == 0) {
@@ -146,7 +147,10 @@ static void display_task (void *pvParameters) {
 		case IDLE:
 			if (sub_state == 0) {
 				/* printf ( "picking led"); */
-				r1 = esp_random () % LED_CNT;
+				do {
+					tmp = esp_random () % LED_CNT;
+				} while (tmp == r1);
+				r1 = tmp;
 				memset (leds, 0, LED_CNT * sizeof (Color));
 				cur_led = r1;
 				ws2812_send_colors (leds, LED_CNT);

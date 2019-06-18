@@ -70,7 +70,7 @@ int gg_https_login (char * mobile,
 
 	tcpip_adapter_init();
 
-	char buf[512];
+	char buf[4096];
 	int ret, len;
 
 

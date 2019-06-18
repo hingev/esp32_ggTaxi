@@ -481,11 +481,13 @@ static void gg_websockets_task (void *pvParameters) {
 
 				ESP_LOGD(TAG, "%d bytes read", len);
 				/* Print response directly to stdout as it is read */
+#if 0
 				for(int i = 0; i < len; i++) {
 					printf ("%02X", buf[i]);
 					/* putchar(buf[i]); */
 				}
 				putchar ('\n');
+#endif
 
 				if (cur_state == HTTP_HEADER) {
 					ESP_LOGI (TAG, "HTTP header found!");
