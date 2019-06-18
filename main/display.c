@@ -128,6 +128,12 @@ static void display_task (void *pvParameters) {
 			else if (res & (1 << EN_ROUTE)) {
 				display_state = EN_ROUTE;
 			}
+			else if (res & (1 << IN_PLACE)) {
+				display_state = IN_PLACE;
+			}
+			else if (res & (1 << IN_PROGRESS)) {
+				display_state = IN_PROGRESS;
+			}
 			/* reset the state machine */
 			step = 0;
 			cur_led = 0;
@@ -197,6 +203,77 @@ static void display_task (void *pvParameters) {
 					if (cur_led >= LED_CNT)
 						cur_led = 0;
 					step = 0;
+				}
+			}
+			ws2812_send_colors (leds, LED_CNT);
+			break;
+		case EN_ROUTE:
+			break;
+		case IN_PLACE:
+			if (sub_state == 0) {
+				memset (leds, 0, LED_CNT * sizeof (Color));
+				sub_state = 1;
+			}
+			else if (sub_state == 1) {
+				leds[(cur_led) % LED_CNT].g = step;
+				leds[(cur_led+4) % LED_CNT].g = step;
+				leds[(cur_led+8) % LED_CNT].g = step;
+				leds[(cur_led+12) % LED_CNT].g = step;
+				leds[(cur_led) % LED_CNT].r = step;
+				leds[(cur_led+4) % LED_CNT].r = step;
+				leds[(cur_led+8) % LED_CNT].r = step;
+				leds[(cur_led+12) % LED_CNT].r = step;
+
+				step += 75;
+				if (step > 200) {
+					sub_state = 2;
+					step = 0;
+				}
+			}
+			else if (sub_state == 2) {
+				leds[(cur_led) % LED_CNT].g *= 0.8;
+				leds[(cur_led+4) % LED_CNT].g *= 0.8;
+				leds[(cur_led+8) % LED_CNT].g *= 0.8;
+				leds[(cur_led+12) % LED_CNT].g *= 0.8;
+				leds[(cur_led) % LED_CNT].r *= 0.8;
+				leds[(cur_led+4) % LED_CNT].r *= 0.8;
+				leds[(cur_led+8) % LED_CNT].r *= 0.8;
+				leds[(cur_led+12) % LED_CNT].r *= 0.8;
+
+				if (leds[cur_led % LED_CNT].g == 0) {
+					sub_state = 1;
+				}
+			}
+			ws2812_send_colors (leds, LED_CNT);
+			break;
+		case IN_PROGRESS:
+			if (sub_state == 0) {
+				memset (leds, 0, LED_CNT * sizeof (Color));
+				sub_state = 1;
+			}
+			else if (sub_state == 1) {
+				leds[(cur_led) % LED_CNT].g = step;
+				leds[(cur_led+4) % LED_CNT].g = step;
+				leds[(cur_led+8) % LED_CNT].g = step;
+				leds[(cur_led+12) % LED_CNT].g = step;
+
+				step += 75;
+				if (step > 200) {
+					sub_state = 2;
+					step = 0;
+				}
+			}
+			else if (sub_state == 2) {
+				leds[(cur_led) % LED_CNT].g *= 0.8;
+				leds[(cur_led+4) % LED_CNT].g *= 0.8;
+				leds[(cur_led+8) % LED_CNT].g *= 0.8;
+				leds[(cur_led+12) % LED_CNT].g *= 0.8;
+
+				if (leds[cur_led % LED_CNT].g == 0) {
+					sub_state = 0;
+					cur_led ++;
+					if (cur_led == LED_CNT)
+						cur_led = 0;
 				}
 			}
 			ws2812_send_colors (leds, LED_CNT);
