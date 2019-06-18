@@ -18,6 +18,8 @@
 #include "ws2812.h"
 #include "display.h"
 
+enum DisplayState display_state = NONE;
+
 #define LED_CNT								16
 
 #define BUT_1				23
@@ -133,6 +135,14 @@ static void display_task (void *pvParameters) {
 		}
 
 		switch (display_state) {
+		case NONE:
+			if (sub_state == 0) {
+				/* Reset the state of the LEDs */
+				memset (leds, 0, LED_CNT * sizeof (Color));
+				ws2812_send_colors (leds, LED_CNT);
+				sub_state ++;
+			}
+			break;
 		case IDLE:
 			if (sub_state == 0) {
 				/* printf ( "picking led"); */

@@ -133,6 +133,11 @@ void app_main()
 		   (chip_info.features & CHIP_FEATURE_EMB_FLASH) ? "embedded" : "external");
 
 
+	/* Hardware init stuff */
+	ws2812_init_spi ();
+	display_task_start ();
+
+
 	/* Init WiFi as a station */
 	wifi_init_sta ();
 
@@ -147,14 +152,11 @@ void app_main()
 		/* fflush (stdout); */
 	}
 
-	/* Hardware init stuff */
-	ws2812_init_spi ();
 
 	/* SECTION: create the button queue */
 	button_queue = xQueueCreate ( 5, sizeof (enum BUTTON_EVENT));
 
 #if 1
-	display_task_start ();
 
 	gg_https_login ("", "");
 
@@ -186,7 +188,8 @@ void app_main()
 	while (1) {
 
 		TxBuff rx;
-		if (xQueueReceive (rx_queue, &rx, 10 / portTICK_PERIOD_MS)) {
+		if (cur_state != WAITING_FOR_WSS &&
+			xQueueReceive (rx_queue, &rx, 10 / portTICK_PERIOD_MS)) {
 
 			ESP_LOGW ("MAIN", "<-- Recv: %s", rx.buff);
 
@@ -232,7 +235,7 @@ void app_main()
 				xQueueReset (button_queue);
 
 
-
+				display_state_set (IDLE);
 				cur_state = NONE;
 
 				/* send request for the profiles drivers */

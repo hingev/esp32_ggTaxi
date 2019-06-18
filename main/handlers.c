@@ -34,6 +34,41 @@ void status_update_handler (char *json_s) {
 	if (name->valuestring != NULL &&
 		strcmp (name->valuestring, "status") == 0) {
 		/* ?? */
+		cJSON *body = cJSON_GetArrayItem (json, 1);
+		assert (cJSON_IsObject (body) == true);
+
+		cJSON *orders = cJSON_GetObjectItemCaseSensitive (body, "orders");
+		assert (cJSON_IsArray (orders) == true);
+
+		if (cJSON_GetArraySize (orders) != 0) {
+			cJSON *ord = cJSON_GetArrayItem (orders, 0);
+			assert (cJSON_IsObject (ord) == true);
+
+			cJSON *orderId = cJSON_GetObjectItemCaseSensitive (ord, "orderId");
+
+			cJSON *accepted_date = cJSON_GetObjectItemCaseSensitive (ord, "acceptedDate");
+			cJSON *cancel_date = cJSON_GetObjectItemCaseSensitive (ord, "cancelDate");
+			cJSON *waiting_date = cJSON_GetObjectItemCaseSensitive (ord, "waitingDate");
+			cJSON *processing_date = cJSON_GetObjectItemCaseSensitive (ord, "processingDate");
+
+			int status_id = 0;
+			uint32_t order_id = orderId->valueint;
+
+			if (cJSON_IsNull (accepted_date)) {
+				status_id = SEARCHING;
+			}
+			else if (cJSON_IsNull (waiting_date)) {
+				/* TODO: fix the other cases, not sure for now */
+			}
+
+			cur_status.status_id = status_id;
+			cur_status.order_id = order_id;
+
+			if (status_id != 0) {
+				display_state_set (status_id);
+			}
+
+		}
 	}
 	else if (name->valuestring != NULL &&
 			 strcmp (name->valuestring, "newOrder") == 0) {
@@ -49,6 +84,7 @@ void status_update_handler (char *json_s) {
 
 		cJSON *statusId = cJSON_GetObjectItemCaseSensitive (newOrder, "statusId");
 		cJSON *orderId = cJSON_GetObjectItemCaseSensitive (newOrder, "orderId");
+
 		/* TODO: add storage for these two */
 
 		int status_id = statusId->valueint;

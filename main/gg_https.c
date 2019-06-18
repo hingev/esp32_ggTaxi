@@ -232,10 +232,10 @@ int gg_https_login (char * mobile,
 		static int request_count;
 		ESP_LOGI(TAG, "Completed %d requests", ++request_count);
 
-		for(int countdown = 2; countdown >= 0; countdown--) {
-			ESP_LOGI(TAG, "%d...", countdown);
-			vTaskDelay(1000 / portTICK_PERIOD_MS);
-		}
+		/* for(int countdown = 2; countdown >= 0; countdown--) { */
+		/* 	ESP_LOGI(TAG, "%d...", countdown); */
+		/* 	vTaskDelay(1000 / portTICK_PERIOD_MS); */
+		/* } */
 		ESP_LOGI(TAG, "OUT!");
 		break;
 	}

@@ -9,9 +9,10 @@ enum DisplayState {
     IN_PROGRESS = 4,
     ENDED       = 5,
     CANCELED    = 6,
+	NONE = -1,
 };
 
-enum DisplayState display_state;
+extern enum DisplayState display_state;
 
 void display_task_start ();
 
