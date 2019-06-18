@@ -42,6 +42,9 @@ struct __attribute__((__packed__)) HEADER {
 struct STATUS {
 	uint32_t order_id;
 	uint32_t status_id;
+
+	uint32_t payment_id;
+	uint32_t profile_id;
 };
 typedef struct STATUS Status;
 

@@ -142,14 +142,31 @@ int get_profiles_handler (int msg_id, char *json_s) {
 	cJSON *results = cJSON_GetObjectItemCaseSensitive (body, "results");
 	assert (cJSON_IsArray (results) == true);
 
+	uint32_t payment_id = 0, profile_id = 0;
+
 	cJSON *profile = NULL;
 	cJSON_ArrayForEach(profile, results)
     {
         cJSON *default_prof = cJSON_GetObjectItemCaseSensitive(profile, "default");
 
+#if CONFIG_GG_PREFER_CARD
+		cJSON *prof_id = cJSON_GetObjectItemCaseSensitive (profile, "id");
+
+		if (prof_id->valueint != 0) {
+			cJSON *payments = cJSON_GetObjectItemCaseSensitive (profile, "payments");
+			assert (cJSON_IsArray (payments) == true);
+			cJSON *p0 = cJSON_GetArrayItem (payments, 0);
+			assert (cJSON_IsObject (p0) == true);
+
+			cJSON *pay_id = cJSON_GetObjectItemCaseSensitive (p0, "id");
+
+			payment_id = pay_id->valueint;
+			profile_id = prof_id->valueint;
+		}
+
+#else
 		if (cJSON_IsBool (default_prof) && cJSON_IsTrue (default_prof)) {
 			/* SECTION: get the payment_id and profile_id  */
-			uint32_t payment_id, profile_id;
 			cJSON *prof_id = cJSON_GetObjectItemCaseSensitive (profile, "id");
 
 			cJSON *payments = cJSON_GetObjectItemCaseSensitive (profile, "payments");
@@ -162,11 +179,21 @@ int get_profiles_handler (int msg_id, char *json_s) {
 			payment_id = pay_id->valueint;
 			profile_id = prof_id->valueint;
 
-			ESP_LOGW (__FUNCTION__, "Got profile id: %d; payment id: %d",
-					  profile_id, payment_id);
-			/* TODO: add storage into global state var */
 		}
+#endif
+
     }
+
+	if (payment_id != 0) {
+		ESP_LOGI (__FUNCTION__, "Got profile id: %d; payment id: %d",
+				  profile_id, payment_id);
+
+
+		/* SECTION: add storage into global state var */
+		cur_status.profile_id = profile_id;
+		cur_status.payment_id = payment_id;
+
+	}
 
 
 end:

@@ -30,6 +30,12 @@ menu "Project configuration"
         help
             Your GG taxi account password.
 
+    config GG_PREFER_CARD
+        boolean "Prefer the credit-card payment over cash when creating the order"
+        default "False"
+        help
+			Define 1 ?
+
 	config HOME_LAT
         string "Home lat"
         default ""
