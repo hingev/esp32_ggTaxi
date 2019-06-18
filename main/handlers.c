@@ -36,6 +36,14 @@ void status_update_handler (char *json_s) {
 			goto end2;
 		}
 
+		cJSON *lat = cJSON_GetObjectItemCaseSensitive (newOrder, "latitude");
+		cJSON *lng = cJSON_GetObjectItemCaseSensitive (newOrder, "longitude");
+
+		if (cJSON_IsNumber (lat) && cJSON_IsNumber (lng)) {
+			cur_status.order_lat = lat->valuedouble;
+			cur_status.order_lng = lng->valuedouble;
+		}
+
 		cJSON *statusId = cJSON_GetObjectItemCaseSensitive (newOrder, "statusId");
 		cJSON *orderId = cJSON_GetObjectItemCaseSensitive (newOrder, "orderId");
 
@@ -88,6 +96,14 @@ void status_update_handler (char *json_s) {
 			cJSON *waiting_date = cJSON_GetObjectItemCaseSensitive (ord, "waitingDate");
 			cJSON *processing_date = cJSON_GetObjectItemCaseSensitive (ord, "processingDate");
 
+			cJSON *lat = cJSON_GetObjectItemCaseSensitive (ord, "latitude");
+			cJSON *lng = cJSON_GetObjectItemCaseSensitive (ord, "longitude");
+
+			if (cJSON_IsNumber (lat) && cJSON_IsNumber (lng)) {
+				cur_status.order_lat = lat->valuedouble;
+				cur_status.order_lng = lng->valuedouble;
+			}
+
 			int status_id = 0;
 			uint32_t order_id = orderId->valueint;
 
@@ -96,6 +112,12 @@ void status_update_handler (char *json_s) {
 			}
 			else if (cJSON_IsNull (waiting_date)) {
 				/* TODO: fix the other cases, not sure for now */
+			}
+
+			cJSON * status_id_obj = cJSON_GetObjectItemCaseSensitive (ord, "statusId");
+			if (status_id_obj != NULL &&
+					cJSON_IsNumber (status_id_obj)) {
+				status_id = status_id_obj->valueint;
 			}
 
 			cur_status.status_id = status_id;
@@ -124,7 +146,8 @@ void status_update_handler (char *json_s) {
 		assert (cJSON_IsString (action) == true);
 
 		if (action->valuestring != NULL) {
-			ESP_LOGW (__FUNCTION__, "Got updateOrder with action %s", action->valuestring);
+			ESP_LOGW (__FUNCTION__,
+								"Got updateOrder with action %s", action->valuestring);
 		}
 
 		cJSON *order = cJSON_GetObjectItemCaseSensitive (update_body, "order");
@@ -132,7 +155,25 @@ void status_update_handler (char *json_s) {
 
 		local_parse (order->valuestring);
 	}
+	else if (name->valuestring != NULL &&
+					 strcmp (name->valuestring, "updateDriverLocation") == 0) {
+		cJSON *obj = cJSON_GetArrayItem (json, 1);
+		assert (cJSON_IsObject (obj) == true);
 
+		double latA, lngA;
+		cJSON *tmp = cJSON_GetObjectItemCaseSensitive (obj, "lat");
+		assert (cJSON_IsNumber (tmp) == true);
+		latA = tmp->valuedouble;
+
+		tmp = cJSON_GetObjectItemCaseSensitive (obj, "lng");
+		assert (cJSON_IsNumber (tmp) == true);
+		lngA = tmp->valuedouble;
+
+		display_set_distance (calc_distance (
+														latA, lngA,
+														cur_status.order_lat, cur_status.order_lng));
+
+	}
 
 end:
 	cJSON_Delete(json);

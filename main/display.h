@@ -19,4 +19,6 @@ void display_task_start ();
 void display_state_set (enum DisplayState);
 void display_state_inc ();
 
+void display_set_distance (double dist);
+
 #endif

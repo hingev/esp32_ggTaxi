@@ -1,7 +1,9 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
+#include "freertos/event_groups.h"
 
 extern QueueHandle_t button_queue;
 enum BUTTON_EVENT {
@@ -45,9 +47,15 @@ struct STATUS {
 
 	uint32_t payment_id;
 	uint32_t profile_id;
+
+	double order_lat;
+	double order_lng;
 };
 typedef struct STATUS Status;
 
 extern Status cur_status;
+
+double calc_distance (double latA, double lngA,
+											double latB, double lngB);
 
 #endif

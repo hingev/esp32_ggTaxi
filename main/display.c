@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_system.h"
@@ -19,6 +20,13 @@
 #include "display.h"
 
 enum DisplayState display_state = NONE;
+
+
+static double display_en_route_distance = 0;
+
+void display_set_distance (double dist) {
+	display_en_route_distance = dist;
+}
 
 #define LED_CNT								16
 
@@ -208,6 +216,52 @@ static void display_task (void *pvParameters) {
 			ws2812_send_colors (leds, LED_CNT);
 			break;
 		case EN_ROUTE:
+			tmp = 0 ;
+			/* FIXME: get a good logarithmic scale here */
+			if (display_en_route_distance <= 100) {
+				tmp = 1;
+			}
+			else if (display_en_route_distance > 100 &&
+							 display_en_route_distance <= 300) {
+				tmp = 2;
+			}
+			else if (display_en_route_distance > 300 &&
+							 display_en_route_distance <= 600) {
+				tmp = 3;
+			}
+			else if (display_en_route_distance > 600) {
+				tmp = display_en_route_distance / 100;
+				if (tmp > LED_CNT)
+					tmp = LED_CNT;
+			}
+
+			/* pulsate tmp leds */
+			if (sub_state == 0) {
+				memset (leds, 0, LED_CNT * sizeof (Color));
+				sub_state = 1;
+			}
+			else if (sub_state == 1) {
+				step += 20;
+				for (i=0; i < tmp; ++i) {
+					leds[i].r = step;
+					leds[i].b = step;
+
+				}
+				if (step > 120)
+					sub_state = 2;
+			}
+			else if (sub_state == 2) {
+				for (i=0; i < LED_CNT; ++i) {
+					leds[i].r *= .8;
+					leds[i].b *= .8;
+				}
+
+				if (leds[0].r == 0) {
+					sub_state = 1;
+					step = 0;
+				}
+			}
+			ws2812_send_colors (leds, LED_CNT);
 			break;
 		case IN_PLACE:
 			if (sub_state == 0) {
