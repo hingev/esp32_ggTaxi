@@ -34,3 +34,18 @@ The LED strip is used as a display.
 # Getting started
 
 Do `make menuconfig` and set your *WiFi* and *GG account* options properly.
+
+# Todo list
+
+Mainly:
+
+- [x] Login over HTTPS, getting auth tokens
+- [x] Secure web-socket creation, encapsulation and things
+- [x] Order creation / cancellation
+- [ ] Car plate number display on the RGB leds ?
+- [ ] Order status update on the LED strip
+
+Maybe:
+
+- [ ] HTTP server for configuration through Web ?
+- [ ] Geolocation api ?
