@@ -167,7 +167,7 @@ void app_main()
 	/* TODO:  */
 	/* wait for the WSS socket open flag */
 
-	enum { WAITING_FOR_WSS, NONE, ORDER_SENT, } cur_state = WAITING_FOR_WSS;
+	enum { WAITING_FOR_WSS, NONE, READY, ORDER_SENT, } cur_state = WAITING_FOR_WSS;
 	enum BUTTON_EVENT be;
 
 	TxBuff profiles = {0, 0, 0x1, 1};
@@ -179,9 +179,8 @@ void app_main()
 		&nearby.buff,
 		"[\"get\",{\"data\":{\"lat\":" CONFIG_HOME_LAT  ",\"lng\":" CONFIG_HOME_LNG "},\"url\":\"/v1/socket/nearbyDrivers\"}]");
 	TxBuff create_order = {NULL, 0, 0x01, 3};
-	create_order.len = asprintf (
-		&create_order.buff,
-		"[\"post\",{\"data\":{\"lat\":" CONFIG_HOME_LAT ",\"lng\": "CONFIG_HOME_LNG",\"address\":\"" CONFIG_HOME_ADDR "\",\"type\":11,\"country\":\"AM\"},\"url\":\"/v1/socket/createOrder\"}]");
+	char *create_order_fmt = "[\"post\",{\"data\":{\"lat\":" CONFIG_HOME_LAT ",\"lng\": "CONFIG_HOME_LNG",\"address\":\"" CONFIG_HOME_ADDR "\",\"type\":11,\"country\":\"AM\", \"payment\": %u, \"profile\": %u},\"url\":\"/v1/socket/createOrder\"}]";
+
 	TxBuff cancel_order = {NULL, 0, 0x01, 4};
 	char *cancel_fmt = "[\"post\", {\"data\": {\"orderId\": %u, \"action\": \"cancelOrder\"}, \"url\": \"/v1/socket/updateOrder\"}]";
 
@@ -202,7 +201,9 @@ void app_main()
 					char *json_s = &tmp[strspn (tmp, "01234567879")];
 
 					if (msg_id == profiles.msg_id) {
-						get_profiles_handler (msg_id, json_s);
+						if (get_profiles_handler (msg_id, json_s) == 0) {
+							cur_state = READY;
+						}
 					}
 					else if (msg_id == create_order.msg_id) {
 						create_order_handler (msg_id, json_s);
@@ -242,7 +243,7 @@ void app_main()
 				xQueueSend (tx_queue, &profiles, (TickType_t) 0);
 			}
 			break;
-		case NONE:
+		case READY:
 			if (xQueueReceive( button_queue, &( be ),
 							   ( TickType_t ) 10 / portTICK_PERIOD_MS )) {
 				/* button pressed */
@@ -250,6 +251,12 @@ void app_main()
 				if (be == BUT_EV_1) {
 					/* TODO: send the order */
 
+					create_order.len = asprintf (
+						&create_order.buff,
+						create_order_fmt,
+						cur_status.payment_id,
+						cur_status.profile_id
+						);
 					xQueueSend (tx_queue, &create_order, (TickType_t) 0);
 					/* xQueueSend (tx_queue, &nearby, (TickType_t) 0); */
 				}
