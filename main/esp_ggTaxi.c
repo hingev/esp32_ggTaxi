@@ -33,6 +33,8 @@
 
 #include "handlers.h"
 
+Status cur_status;
+
 /* used for display_task -> main_task */
 QueueHandle_t button_queue;
 
@@ -178,6 +180,8 @@ void app_main()
 	create_order.len = asprintf (
 		&create_order.buff,
 		"[\"post\",{\"data\":{\"lat\":" CONFIG_HOME_LAT ",\"lng\": "CONFIG_HOME_LNG",\"address\":\"" CONFIG_HOME_ADDR "\",\"type\":11,\"country\":\"AM\"},\"url\":\"/v1/socket/createOrder\"}]");
+	TxBuff cancel_order = {NULL, 0, 0x01, 4};
+	char *cancel_fmt = "[\"post\", {\"data\": {\"orderId\": %u, \"action\": \"cancelOrder\"}, \"url\": \"/v1/socket/updateOrder\"}]";
 
 	while (1) {
 
@@ -243,11 +247,18 @@ void app_main()
 				if (be == BUT_EV_1) {
 					/* TODO: send the order */
 
-					xQueueSend (tx_queue, &nearby, (TickType_t) 0);
+					xQueueSend (tx_queue, &create_order, (TickType_t) 0);
+					/* xQueueSend (tx_queue, &nearby, (TickType_t) 0); */
 				}
 				else if (be == BUT_EV_2) {
 
-					xQueueSend (tx_queue, &create_order, (TickType_t) 0);
+					/* craft the cancel order */
+					cancel_order.len = asprintf (
+						&cancel_order.buff,
+						cancel_fmt,
+						cur_status.order_id);
+
+					xQueueSend (tx_queue, &cancel_order, (TickType_t) 0);
 				}
 			}
 			break;

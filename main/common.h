@@ -39,4 +39,12 @@ struct __attribute__((__packed__)) HEADER {
 	/* uint64_t len_ex_ex; */
 };
 
+struct STATUS {
+	uint32_t order_id;
+	uint32_t status_id;
+};
+typedef struct STATUS Status;
+
+extern Status cur_status;
+
 #endif

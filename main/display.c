@@ -123,8 +123,8 @@ static void display_task (void *pvParameters) {
 			else if (res & (1 << SEARCHING)) {
 				display_state = SEARCHING;
 			}
-			else if (res & (1 << FOUND)) {
-				display_state = FOUND;
+			else if (res & (1 << EN_ROUTE)) {
+				display_state = EN_ROUTE;
 			}
 			/* reset the state machine */
 			step = 0;

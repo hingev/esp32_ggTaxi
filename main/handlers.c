@@ -51,6 +51,22 @@ void status_update_handler (char *json_s) {
 		cJSON *orderId = cJSON_GetObjectItemCaseSensitive (newOrder, "orderId");
 		/* TODO: add storage for these two */
 
+		int status_id = statusId->valueint;
+		uint32_t order_id = orderId->valueint;
+
+		cur_status.status_id = status_id;
+		cur_status.order_id = order_id;
+
+		ESP_LOGI (__FUNCTION__,
+				  "Got ORDERID: %u; STATUS ID: %d",
+				  cur_status.order_id,
+				  cur_status.status_id);
+
+		if (status_id == 1) {
+			display_state_set (SEARCHING);
+		}
+		/* TODO: add other display modes */
+
 	end2:
 		cJSON_Delete (newOrder);
 	}
@@ -112,6 +128,7 @@ int get_profiles_handler (int msg_id, char *json_s) {
 
 			ESP_LOGW (__FUNCTION__, "Got profile id: %d; payment id: %d",
 					  profile_id, payment_id);
+			/* TODO: add storage into global state var */
 		}
     }
 
