@@ -1,8 +1,6 @@
 
 # Goal
 
-**GG Taxi** is a Taxi service created in Armenia, originally made as a mobile app.
-
 Get a device, which can order a GG Taxi with a press of a single button.
 
 The project is based around the *ESP32* SoC.
@@ -49,3 +47,13 @@ Maybe:
 
 - [ ] HTTP server for configuration through Web ?
 - [ ] Geolocation api ?
+
+# Disclaimer
+
+**GG Taxi** is a Taxi service created in Armenia, originally made as a mobile app.
+
+There is, however, also a web version.
+
+**This is not an official API guide**. The code just imitates a browser.
+There is no public API, as of writing this.
+Please don't use this code for anything bad or illegal.
