@@ -195,11 +195,13 @@ static int parse_payload (Buffer *b) {
 		abort ();
 	}
 	if (h.payload_len == 126) {
+		ESP_LOGE ("PARSE", "ind: %d; len_ex +4: %d", b->ind, h.len_ex + 4);
 		if (h.len_ex + 4 < b->ind)
 			return 1;
 		if (h.len_ex + 4 == b->ind)
 			return 0;
 		/* FIXME: same fixme as above */
+		ESP_LOGE ("PARSE", "About to abort :/");
 		abort ();
 	}
 
@@ -215,7 +217,8 @@ static void gg_websockets_task (void *pvParameters) {
 #define TX_TIMER_MAX_CNT	10
 	size_t tx_timer = 0; 			/* used for ping/pong counting */
 
-	char buf[1024];
+	size_t buf_size = 4096;
+	char *buf = malloc (buf_size);
 
 	Buffer payload = {0};
 
@@ -351,8 +354,8 @@ static void gg_websockets_task (void *pvParameters) {
 		{
 			/* In real life, we probably want to close connection if ret != 0 */
 			ESP_LOGW(TAG, "Failed to verify peer certificate!");
-			bzero(buf, sizeof(buf));
-			mbedtls_x509_crt_verify_info(buf, sizeof(buf), "  ! ", flags);
+			bzero(buf, buf_size);
+			mbedtls_x509_crt_verify_info(buf, buf_size, "  ! ", flags);
 			ESP_LOGW(TAG, "verification info: %s", buf);
 		}
 		else {
@@ -382,8 +385,8 @@ static void gg_websockets_task (void *pvParameters) {
 
 		do
 		{
-			len = sizeof(buf) - 1;
-			bzero(buf, sizeof(buf));
+			len = buf_size - 1;
+			bzero(buf, buf_size);
 			ret = mbedtls_ssl_read(&ssl, (unsigned char *)buf, len);
 
 			if(ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE)
@@ -491,8 +494,13 @@ static void gg_websockets_task (void *pvParameters) {
 						continue;
 					}
 				}
-				if (cur_state == PAYLOAD_START) {
-					ESP_LOGI (TAG, "got payload start: ");
+				if (cur_state == PAYLOAD_START || cur_state == PAYLOAD_DATA) {
+
+					if (cur_state == PAYLOAD_DATA) {
+						ESP_LOGW (TAG, "FRAGMENTED: got payload data: ");
+					} else {
+						ESP_LOGI (TAG, "got payload start: ");
+					}
 					add_to_buffer (&payload, buf, len);
 
 					if (parse_payload (&payload) == 0) {

@@ -27,6 +27,43 @@ void status_update_handler (char *json_s) {
 	}
 
 
+	void local_parse (char *valuestring) {
+
+		cJSON *newOrder = cJSON_Parse (valuestring);
+		if (newOrder == NULL) {
+			const char *error_ptr = cJSON_GetErrorPtr();
+			ESP_LOGE (__FUNCTION__, "Error parsing the internal json: %s", error_ptr);
+			goto end2;
+		}
+
+		cJSON *statusId = cJSON_GetObjectItemCaseSensitive (newOrder, "statusId");
+		cJSON *orderId = cJSON_GetObjectItemCaseSensitive (newOrder, "orderId");
+
+		/* TODO: add storage for these two */
+
+		int status_id = statusId->valueint;
+		uint32_t order_id = orderId->valueint;
+
+		cur_status.status_id = status_id;
+		cur_status.order_id = order_id;
+
+		ESP_LOGI (__FUNCTION__,
+				  "Got ORDERID: %u; STATUS ID: %d",
+				  cur_status.order_id,
+				  cur_status.status_id);
+
+		if (status_id == 1) {
+			display_state_set (SEARCHING);
+		} else if (status_id == 6) {
+			display_state_set (IDLE);
+		}
+		/* TODO: add other display modes */
+
+	end2:
+		cJSON_Delete (newOrder);
+
+	}
+
 	assert (cJSON_IsArray (json) == true);
 	cJSON *name = cJSON_GetArrayItem (json, 0);
 	assert (cJSON_IsString (name) == true);
@@ -75,36 +112,25 @@ void status_update_handler (char *json_s) {
 		/* this is an interesting one */
 		cJSON *new_order_body  = cJSON_GetArrayItem (json, 1);
 		assert (cJSON_IsString (new_order_body));
-		cJSON *newOrder = cJSON_Parse (new_order_body->valuestring);
-		if (newOrder == NULL) {
-			const char *error_ptr = cJSON_GetErrorPtr();
-			ESP_LOGE (__FUNCTION__, "Error parsing the internal json: %s", error_ptr);
-			goto end2;
+		local_parse (new_order_body->valuestring);
+
+	}
+	else if (name->valuestring != NULL &&
+			 strcmp (name->valuestring, "updateOrder") == 0) {
+		/* this is an interesting one */
+		cJSON *update_body  = cJSON_GetArrayItem (json, 1);
+
+		cJSON *action = cJSON_GetObjectItemCaseSensitive (update_body, "action");
+		assert (cJSON_IsString (action) == true);
+
+		if (action->valuestring != NULL) {
+			ESP_LOGW (__FUNCTION__, "Got updateOrder with action %s", action->valuestring);
 		}
 
-		cJSON *statusId = cJSON_GetObjectItemCaseSensitive (newOrder, "statusId");
-		cJSON *orderId = cJSON_GetObjectItemCaseSensitive (newOrder, "orderId");
+		cJSON *order = cJSON_GetObjectItemCaseSensitive (update_body, "order");
+		assert (cJSON_IsString (order) == true);
 
-		/* TODO: add storage for these two */
-
-		int status_id = statusId->valueint;
-		uint32_t order_id = orderId->valueint;
-
-		cur_status.status_id = status_id;
-		cur_status.order_id = order_id;
-
-		ESP_LOGI (__FUNCTION__,
-				  "Got ORDERID: %u; STATUS ID: %d",
-				  cur_status.order_id,
-				  cur_status.status_id);
-
-		if (status_id == 1) {
-			display_state_set (SEARCHING);
-		}
-		/* TODO: add other display modes */
-
-	end2:
-		cJSON_Delete (newOrder);
+		local_parse (order->valuestring);
 	}
 
 
