@@ -194,7 +194,10 @@ void app_main()
 					int msg_id = atoi (&tmp[2]);
 					char *json_s = &tmp[strspn (tmp, "01234567879")];
 
-					if (msg_id == create_order.msg_id) {
+					if (msg_id == profiles.msg_id) {
+						get_profiles_handler (msg_id, json_s);
+					}
+					else if (msg_id == create_order.msg_id) {
 						create_order_handler (msg_id, json_s);
 					}
 				}

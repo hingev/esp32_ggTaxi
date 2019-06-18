@@ -74,7 +74,20 @@ int get_profiles_handler (int msg_id, char *json_s) {
 	cJSON *obj = cJSON_GetArrayItem (json, 0);
 	assert (cJSON_IsObject (obj) == true);
 
-	cJSON *results = cJSON_GetObjectItemCaseSensitive (obj, "results");
+	cJSON *body = cJSON_GetObjectItemCaseSensitive (obj, "body");
+	assert (cJSON_IsObject (body) == true);
+
+	cJSON *err = cJSON_GetObjectItemCaseSensitive (body, "error");
+	if (cJSON_IsBool (err) && cJSON_IsTrue (err)) {
+		cJSON *err_msg = cJSON_GetObjectItemCaseSensitive (body, "error_msg");
+
+		if ( cJSON_IsString (err_msg) && err_msg->valuestring != NULL) {
+			ESP_LOGE (__FUNCTION__, "GG Error message: %s", err_msg->valuestring);
+		}
+		goto end;
+	}
+
+	cJSON *results = cJSON_GetObjectItemCaseSensitive (body, "results");
 	assert (cJSON_IsArray (results) == true);
 
 	cJSON *profile = NULL;
@@ -84,7 +97,21 @@ int get_profiles_handler (int msg_id, char *json_s) {
 
 		if (cJSON_IsBool (default_prof) && cJSON_IsTrue (default_prof)) {
 			/* SECTION: get the payment_id and profile_id  */
+			uint32_t payment_id, profile_id;
+			cJSON *prof_id = cJSON_GetObjectItemCaseSensitive (profile, "id");
 
+			cJSON *payments = cJSON_GetObjectItemCaseSensitive (profile, "payments");
+			assert (cJSON_IsArray (payments) == true);
+			cJSON *p0 = cJSON_GetArrayItem (payments, 0);
+			assert (cJSON_IsObject (p0) == true);
+
+			cJSON *pay_id = cJSON_GetObjectItemCaseSensitive (p0, "id");
+
+			payment_id = pay_id->valueint;
+			profile_id = prof_id->valueint;
+
+			ESP_LOGW (__FUNCTION__, "Got profile id: %d; payment id: %d",
+					  profile_id, payment_id);
 		}
     }
 
