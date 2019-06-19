@@ -60,11 +60,8 @@ void status_update_handler (char *json_s) {
 				  cur_status.order_id,
 				  cur_status.status_id);
 
-		if (status_id == 1) {
-			display_state_set (SEARCHING);
-		} else if (status_id == 6) {
-			display_state_set (IDLE);
-		}
+		display_state_set (status_id);
+
 		/* TODO: add other display modes */
 
 	end2:
@@ -170,8 +167,14 @@ void status_update_handler (char *json_s) {
 		lngA = tmp->valuedouble;
 
 		display_set_distance (calc_distance (
-														latA, lngA,
-														cur_status.order_lat, cur_status.order_lng));
+								  latA, lngA,
+								  cur_status.order_lat, cur_status.order_lng));
+
+		if (cur_status.status_id == 0) {
+			/* TODO: figure out how to figure out the status after a reboot */
+			cur_status.status_id = IN_PROGRESS;
+			display_state_set (cur_status.status_id);
+		}
 
 	}
 

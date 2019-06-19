@@ -179,7 +179,7 @@ void app_main()
 		&nearby.buff,
 		"[\"get\",{\"data\":{\"lat\":" CONFIG_HOME_LAT  ",\"lng\":" CONFIG_HOME_LNG "},\"url\":\"/v1/socket/nearbyDrivers\"}]");
 	TxBuff create_order = {NULL, 0, 0x01, 3};
-	char *create_order_fmt = "[\"post\",{\"data\":{\"lat\":" CONFIG_HOME_LAT ",\"lng\": "CONFIG_HOME_LNG",\"address\":\"" CONFIG_HOME_ADDR "\",\"type\":11,\"country\":\"AM\", \"payment\": %u, \"profile\": %u},\"url\":\"/v1/socket/createOrder\"}]";
+	char *create_order_fmt = "[\"post\",{\"data\":{\"lat\":" CONFIG_HOME_LAT ",\"lng\": "CONFIG_HOME_LNG",\"address\":\"" CONFIG_HOME_ADDR "\",\"type\":1,\"country\":\"AM\", \"payment\": %u, \"profile\": %u},\"url\":\"/v1/socket/createOrder\"}]";
 
 	TxBuff cancel_order = {NULL, 0, 0x01, 4};
 	char *cancel_fmt = "[\"post\", {\"data\": {\"orderId\": %u, \"action\": \"cancelOrder\"}, \"url\": \"/v1/socket/updateOrder\"}]";

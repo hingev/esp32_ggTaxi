@@ -142,6 +142,12 @@ static void display_task (void *pvParameters) {
 			else if (res & (1 << IN_PROGRESS)) {
 				display_state = IN_PROGRESS;
 			}
+			else if (res & (1 << ENDED)) {
+				display_state = IDLE;
+			}
+			else if (res & (1 << CANCELED)) {
+				display_state = IDLE;
+			}
 			/* reset the state machine */
 			step = 0;
 			cur_led = 0;
