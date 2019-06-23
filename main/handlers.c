@@ -47,8 +47,6 @@ void status_update_handler (char *json_s) {
 		cJSON *statusId = cJSON_GetObjectItemCaseSensitive (newOrder, "statusId");
 		cJSON *orderId = cJSON_GetObjectItemCaseSensitive (newOrder, "orderId");
 
-		/* TODO: add storage for these two */
-
 		int status_id = statusId->valueint;
 		uint32_t order_id = orderId->valueint;
 
@@ -62,7 +60,18 @@ void status_update_handler (char *json_s) {
 
 		display_state_set (status_id);
 
-		/* TODO: add other display modes */
+		/* TODO: set the display_distance if update contains the location */
+		cJSON *drv_location = cJSON_GetObjectItemCaseSensitive (newOrder, "location");
+		if (cJSON_IsArray (drv_location) && cJSON_GetArraySize (drv_location) == 2) {
+			double lat1, lng1;
+			lat1 = cJSON_GetArrayItem (drv_location, 1)->valuedouble;
+			lng1 = cJSON_GetArrayItem (drv_location, 0)->valuedouble;
+
+			display_set_distance (calc_distance (
+									  lat1, lng1,
+									  cur_status.order_lat, cur_status.order_lng));
+
+		}
 
 	end2:
 		cJSON_Delete (newOrder);
