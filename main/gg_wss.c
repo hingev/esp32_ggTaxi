@@ -26,7 +26,7 @@
 
 int tx_buff_encapsulate (TxBuff **res, TxBuff *src, uint32_t mask) {
 
-	ESP_LOGI ("ENC", "MASK: %08X", mask);
+	ESP_LOGD ("ENC", "MASK: %08X", mask);
 
 	TxBuff *tb = calloc (1, sizeof (TxBuff));
 
@@ -40,12 +40,12 @@ int tx_buff_encapsulate (TxBuff **res, TxBuff *src, uint32_t mask) {
 		header_size = 4;
 	}
 
-	ESP_LOGI ("ENC", "Header size: %d", header_size);
+	ESP_LOGD ("ENC", "Header size: %d", header_size);
 
 	tb->len = src->len + header_size + 4; /* 4 bytes for masking; 4 just in case */
 
-	ESP_LOGI ("ENC", "TB-len = %d", tb->len);
-	ESP_LOGI ("ENC", "SRc len: %d", src->len);
+	ESP_LOGD ("ENC", "TB-len = %d", tb->len);
+	ESP_LOGD ("ENC", "SRc len: %d", src->len);
 
 	tb->buff = malloc ( tb->len );
 
@@ -83,7 +83,7 @@ int tx_buff_encapsulate (TxBuff **res, TxBuff *src, uint32_t mask) {
 	tb->buff[cur_i++] = masks[3];
 
 	for (i=0; i < src->len; ++i) {
-		/* ESP_LOGI ("ENC", "Cur i: %d; i = %d", cur_i, i); */
+		/* ESP_LOGD ("ENC", "Cur i: %d; i = %d", cur_i, i); */
 		assert (cur_i < tb->len);
 		tb->buff[cur_i++] = src->buff[i] ^ masks[i%4];
 	}
@@ -159,10 +159,11 @@ static void add_to_buffer (Buffer *b, char *add, int len) {
 		int new_size = b->size;
 		while (new_size < b->ind + len) {
 			new_size *= 2;
-			assert (new_size < 16384);
+			assert (new_size < (2 * 16384));
 		}
 
 		b->data = realloc (b->data, new_size);
+		ESP_LOGW ("BUFF", "Resized the buffer %d -> %d", b->size, new_size);
 		b->size = new_size;
 	}
 
@@ -174,21 +175,64 @@ static void reset_buffer (Buffer *b) {
 	b->ind = 0;
 }
 
-static int parse_payload (Buffer *b) {
+/* Return 0 if the package is completely received  */
+/* Return 1 if there are still bytes to receive */
+/* Return -1 if the package is fragmented */
+static int parse_payload (Buffer *b, Buffer *res) {
 	if (b->ind < 2)
-		return -1;
+		return 1;
 
-	struct HEADER h;
+	static Buffer fragmented = {0};
+	struct HEADER h = {0};
 	memcpy (&h, b->data, my_min (sizeof (struct HEADER), b->ind));
 
 	h.len_ex = htons (h.len_ex);
 
-	ESP_LOGW ("PARSE", "Payload len :%02X, len_ex: %04X", h.payload_len, h.len_ex);
+	ESP_LOGW ("PARSE", "Payload len :%02X, len_ex: %04X; opcode: %02X; fin: %d",
+			  h.payload_len, h.len_ex, h.opcode, h.fin);
 	/* printf ("Payload len: %02X; ind: %02X\n", h.payload_len, b->ind); */
+
+	size_t frag_size = h.payload_len;
+	size_t header_size = header_get_size (&h);
+	if (frag_size == 126)
+		frag_size = h.len_ex;
+	else if (frag_size == 127) {
+		ESP_LOGE ("PARSE", "Parsing for looong packages is absent \\-(^_^)-/");
+		abort ();
+	}
+
+	if (h.fin == 0 && (h.opcode & 0b1000) == 0) {
+		/* Fin 0 and Not a control package */
+		ESP_LOGW ("PARSE", "Fin bit not set;");
+
+		if (h.opcode != 0) {
+			/* First part of the fragmented package */
+			reset_buffer (&fragmented);
+			add_to_buffer (&fragmented, b->data, frag_size);
+			return -1;
+		}
+		else if (h.opcode == 0) {
+			/* EXAMPLE: For a text message sent as three fragments, the first
+			   fragment would have an opcode of 0x1 and a FIN bit clear, the
+			   second fragment would have an opcode of 0x0 and a FIN bit clear,
+			   and the third fragment would have an opcode of 0x0 and a FIN bit
+			   that is set. */
+			/* Continuation of fragmented packages */
+			add_to_buffer (&fragmented, b->data + header_size, frag_size);
+			return -2;
+		}
+	}
+	else if (h.fin == 1 && h.opcode == 0) {
+		/* Final part of the fragmented package */
+		add_to_buffer (&fragmented, b->data + header_size, frag_size);
+		*res = fragmented;
+		return 0;
+	}
 
 	if (h.payload_len <= 125) {
 		if (h.payload_len + 2 == b->ind) {
 			/* package is complete */
+			*res = *b;
 			return 0;
 		}
 		/* FIXME: what if more bytes are left from the next package !! */
@@ -198,10 +242,21 @@ static int parse_payload (Buffer *b) {
 		ESP_LOGE ("PARSE", "ind: %d; len_ex +4: %d", b->ind, h.len_ex + 4);
 		if (h.len_ex + 4 < b->ind)
 			return 1;
-		if (h.len_ex + 4 == b->ind)
+		if (h.len_ex + 4 == b->ind) {
+			*res = *b;
 			return 0;
+		}
+		if (h.len_ex + 4 > b->ind) {
+			ESP_LOG_BUFFER_HEXDUMP ("PPP", b->data, b->ind, ESP_LOG_INFO);
+			abort ();
+			return -1;
+		}
 		/* FIXME: same fixme as above */
 		ESP_LOGE ("PARSE", "About to abort :/");
+		abort ();
+	}
+	if (h.payload_len == 127) {
+		ESP_LOGE ("PARSE", "Parsing for looong packages is absent \\-(^_^)-/");
 		abort ();
 	}
 
@@ -217,7 +272,7 @@ static void gg_websockets_task (void *pvParameters) {
 #define TX_TIMER_MAX_CNT	10
 	size_t tx_timer = 0; 			/* used for ping/pong counting */
 
-	size_t buf_size = 4096;
+	size_t buf_size = 4096 + 16;
 	char *buf = malloc (buf_size);
 
 	Buffer payload = {0};
@@ -479,8 +534,9 @@ static void gg_websockets_task (void *pvParameters) {
 			else {
 				len = ret;
 
-				ESP_LOGD(TAG, "%d bytes read", len);
+				ESP_LOGW(TAG, "%d bytes read", len);
 				/* Print response directly to stdout as it is read */
+				// ESP_LOG_BUFFER_HEXDUMP (TAG, buf, len, ESP_LOG_INFO);
 #if 0
 				for(int i = 0; i < len; i++) {
 					printf ("%02X", buf[i]);
@@ -499,25 +555,30 @@ static void gg_websockets_task (void *pvParameters) {
 				if (cur_state == PAYLOAD_START || cur_state == PAYLOAD_DATA) {
 
 					if (cur_state == PAYLOAD_DATA) {
-						ESP_LOGW (TAG, "FRAGMENTED: got payload data: ");
+						ESP_LOGW (TAG, "FRAGMENTED: got %d bytes payload data: ", len);
 					} else {
 						ESP_LOGI (TAG, "got payload start: ");
 					}
 					add_to_buffer (&payload, buf, len);
 
-					if (parse_payload (&payload) == 0) {
+					Buffer result = {0};
+					int ret = parse_payload (&payload, &result);
+
+					if (ret == 0) {
 						/* if the frame was fully received- */
 						/* SECTION: handle the package */
 						struct HEADER h;
-						memcpy (&h, payload.data,
-								my_min (sizeof (struct HEADER), payload.ind));
+						memcpy (&h, result.data,
+								my_min (sizeof (struct HEADER), result.ind));
 						int header_size = header_get_size (&h);
-						payload.data[payload.ind] = 0; /* Null terminate */
-						char *text = &payload.data[header_size];
+						result.data[result.ind] = 0; /* Null terminate */
+						char *text = &result.data[header_size];
 
 						TxBuff tmp = {0};
-						tmp.len = payload.ind - header_size;
+						tmp.len = result.ind - header_size;
+						ESP_LOGI ("PARSE", "tmp buffer len: %d", tmp.len);
 						tmp.buff = malloc (tmp.len + 1);
+						assert (tmp.buff != NULL);
 						memcpy (tmp.buff, text, tmp.len);
 						tmp.buff[tmp.len] = 0;
 
@@ -525,7 +586,12 @@ static void gg_websockets_task (void *pvParameters) {
 
 						reset_buffer (&payload);
 						cur_state = PAYLOAD_START;
-					} else {
+					}
+					else if (ret < 0) {
+						reset_buffer (&payload);
+						cur_state = PAYLOAD_START;
+					}
+					else {
 						cur_state = PAYLOAD_DATA;
 					}
 				}
