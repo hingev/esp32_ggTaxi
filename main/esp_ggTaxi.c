@@ -167,7 +167,9 @@ void app_main()
 	/* TODO:  */
 	/* wait for the WSS socket open flag */
 
-	enum { WAITING_FOR_WSS, NONE, READY, ORDER_SENT, } cur_state = WAITING_FOR_WSS;
+	enum { WAITING_FOR_WSS, NONE, PRE_READY, READY, ORDER_SENT, } cur_state = WAITING_FOR_WSS;
+	int cur_state_counter = 0;
+	const int READY_CNT = 2;
 	enum BUTTON_EVENT be;
 
 	TxBuff profiles = {0, 0, 0x1, 1};
@@ -179,10 +181,20 @@ void app_main()
 		&nearby.buff,
 		"[\"get\",{\"data\":{\"lat\":" CONFIG_HOME_LAT  ",\"lng\":" CONFIG_HOME_LNG "},\"url\":\"/v1/socket/nearbyDrivers\"}]");
 	TxBuff create_order = {NULL, 0, 0x01, 3};
-	char *create_order_fmt = "[\"post\",{\"data\":{\"lat\":" CONFIG_HOME_LAT ",\"lng\": "CONFIG_HOME_LNG",\"address\":\"" CONFIG_HOME_ADDR "\",\"type\":1,\"country\":\"AM\", \"payment\": %u, \"profile\": %u},\"url\":\"/v1/socket/createOrder\"}]";
+	char *create_order_fmt = "[\"post\",{\"data\":{\"lat\":" CONFIG_HOME_LAT ",\"lng\": "CONFIG_HOME_LNG",\"address\":\"" CONFIG_HOME_ADDR "\",\"type\":%d,\"country\":\"AM\", \"payment\": %u, \"profile\": %u},\"url\":\"/v1/socket/createOrder\"}]";
 
 	TxBuff cancel_order = {NULL, 0, 0x01, 4};
 	char *cancel_fmt = "[\"post\", {\"data\": {\"orderId\": %u, \"action\": \"cancelOrder\"}, \"url\": \"/v1/socket/updateOrder\"}]";
+
+	TxBuff get_tariffs = {NULL, 0, 0x01, 5};
+	get_tariffs.len = asprintf (
+		&get_tariffs.buff,
+		"[\"get\",{\"data\":{\"lat\": " CONFIG_HOME_LAT ",\"lng\": " CONFIG_HOME_LNG ",\"country\":\"AM\"},\"url\":\"/v1/socket/availableTypes\"}]");
+	// Time format: 10:47:10+00:00
+
+	Tariff_t *tariffs = NULL;
+	int tariff_cnt = 0;
+	int selected_tariff_idx = -1;
 
 	while (1) {
 
@@ -202,11 +214,27 @@ void app_main()
 
 					if (msg_id == profiles.msg_id) {
 						if (get_profiles_handler (msg_id, json_s) == 0) {
-							cur_state = READY;
+							cur_state_counter ++;
+							if (cur_state_counter == READY_CNT)
+								cur_state = PRE_READY;
 						}
 					}
 					else if (msg_id == create_order.msg_id) {
 						create_order_handler (msg_id, json_s);
+					}
+					else if (msg_id == get_tariffs.msg_id) {
+						get_tariffs_handler (msg_id, json_s, &tariffs, &tariff_cnt);
+
+						ssize_t i ;
+						for (i=0; i < tariff_cnt; ++i) {
+							ESP_LOGI ("TARIFF", "Tariff id=%d; minimal:%d",
+									  tariffs[i].type_id,
+									  tariffs[i].minimal);
+						}
+						cur_state_counter ++;
+						if (cur_state_counter == READY_CNT)
+							cur_state = PRE_READY;
+
 					}
 				}
 				if (tmp[1] == '2') {
@@ -241,7 +269,12 @@ void app_main()
 
 				/* send request for the profiles drivers */
 				xQueueSend (tx_queue, &profiles, (TickType_t) 0);
+				xQueueSend (tx_queue, &get_tariffs, (TickType_t) 0);
 			}
+			break;
+		case PRE_READY:
+			display_state_set (IDLE_READY);
+			cur_state = READY;
 			break;
 		case READY:
 			if (xQueueReceive( button_queue, &( be ),
@@ -249,11 +282,13 @@ void app_main()
 				/* button pressed */
 				ESP_LOGI ("MAIN", "Button %d was pressed!", be);
 				if (be == BUT_EV_1) {
-					/* TODO: send the order */
-
+					int order_type_id = 11;
+					if (selected_tariff_idx != -1)
+						order_type_id = tariffs[selected_tariff_idx].type_id;
 					create_order.len = asprintf (
 						&create_order.buff,
 						create_order_fmt,
+						order_type_id,
 						cur_status.payment_id,
 						cur_status.profile_id
 						);
@@ -262,13 +297,25 @@ void app_main()
 				}
 				else if (be == BUT_EV_2) {
 
-					/* craft the cancel order */
-					cancel_order.len = asprintf (
-						&cancel_order.buff,
-						cancel_fmt,
-						cur_status.order_id);
+					if (cur_status.order_id == 0) {
+						ESP_LOGI ("MAIN", "Showing tariff!");
 
-					xQueueSend (tx_queue, &cancel_order, (TickType_t) 0);
+						/* TODO: select the taxi type to be called */
+						selected_tariff_idx ++;
+						if (selected_tariff_idx == tariff_cnt)
+							selected_tariff_idx = 0;
+						display_set_tariff (tariffs[selected_tariff_idx].minimal);
+						display_state_set (TARIFF);
+
+					} else {
+						/* craft the cancel order */
+						cancel_order.len = asprintf (
+							&cancel_order.buff,
+							cancel_fmt,
+							cur_status.order_id);
+
+						xQueueSend (tx_queue, &cancel_order, (TickType_t) 0);
+					}
 				}
 			}
 			break;

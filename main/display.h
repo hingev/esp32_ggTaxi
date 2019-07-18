@@ -9,6 +9,8 @@ enum DisplayState {
 	IN_PROGRESS = 4,
 	ENDED       = 5,
 	CANCELED    = 6,
+	TARIFF		= 7,
+	IDLE_READY  = 8,
 	NONE = -1,
 };
 
@@ -20,5 +22,6 @@ void display_state_set (enum DisplayState);
 void display_state_inc ();
 
 void display_set_distance (double dist);
+void display_set_tariff (float dram);
 
 #endif

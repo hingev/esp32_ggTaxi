@@ -53,9 +53,15 @@ struct STATUS {
 };
 typedef struct STATUS Status;
 
+struct Tariff {
+	int minimal;
+	int type_id;
+};
+typedef struct Tariff Tariff_t;
+
 extern Status cur_status;
 
 double calc_distance (double latA, double lngA,
-											double latB, double lngB);
+					  double latB, double lngB);
 
 #endif

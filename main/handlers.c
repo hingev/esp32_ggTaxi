@@ -313,3 +313,85 @@ end:
 	cJSON_Delete(json);
 	return res;
 }
+
+int get_tariffs_handler (int msg_id, char *json_s, Tariff_t **types, int *size) {
+	int res = 0;
+
+	// ESP_LOGI (__FUNCTION__, "ID: %d; BUFF: %s", msg_id, json_s);
+
+	cJSON *json = cJSON_Parse(json_s);
+	if (json == NULL) {
+		const char *error_ptr = cJSON_GetErrorPtr();
+		ESP_LOGE (__FUNCTION__, "Error in json parsing: %s", error_ptr);
+		goto end;
+	}
+
+	assert (cJSON_IsArray (json) == true);
+	cJSON *obj = cJSON_GetArrayItem (json, 0);
+	assert (cJSON_IsObject (obj) == true);
+
+	cJSON *body = cJSON_GetObjectItemCaseSensitive (obj, "body");
+
+    // [0]["body"]["results"][1]["tariffInfo"][0]["keys"][2]["value"]["fare"]
+
+	cJSON *err = cJSON_GetObjectItemCaseSensitive (body, "error");
+	if (cJSON_IsBool (err) && cJSON_IsFalse (err)) {
+		cJSON *results = cJSON_GetObjectItemCaseSensitive (body, "results");
+		assert (cJSON_IsArray (results) == true);
+
+		*size = cJSON_GetArraySize (results);
+		(*types) = calloc (sizeof (Tariff_t), *size);
+		int current_id = 0;
+
+		cJSON *res = NULL;
+		cJSON_ArrayForEach(res, results)
+		{
+			cJSON *tariff_info_arr = cJSON_GetObjectItemCaseSensitive (res, "tariffInfo");
+			assert (cJSON_IsArray (tariff_info_arr) == true);
+			if (cJSON_GetArraySize (tariff_info_arr) == 0)
+				continue;
+			cJSON *tariff_info = cJSON_GetArrayItem (tariff_info_arr, 0);
+			assert (cJSON_IsObject (tariff_info) == true);
+
+			cJSON *keys = cJSON_GetObjectItemCaseSensitive (tariff_info, "keys");
+			cJSON *type_id = cJSON_GetObjectItemCaseSensitive (res, "typeId");
+			assert (cJSON_IsNumber (type_id) == true);
+
+			int itype_id = type_id->valueint;
+			int minimal = -1;
+
+			cJSON *key = NULL;
+			cJSON_ArrayForEach (key, keys)
+			{
+				cJSON *key_name = cJSON_GetObjectItemCaseSensitive (key, "name");
+				assert (cJSON_IsString (key_name) == true);
+
+				if (key_name->valuestring != NULL &&
+					strcmp (key_name->valuestring, "min") == 0) {
+					cJSON *value = cJSON_GetObjectItemCaseSensitive (key, "value");
+					assert (cJSON_IsNumber (value) == true);
+
+					minimal = value->valueint;
+				}
+			}
+
+			if (minimal != -1) {
+				(*types)[current_id].minimal = minimal;
+				(*types)[current_id].type_id = itype_id;
+				current_id ++;
+			}
+		}
+		*size = current_id;
+
+	} else {
+		cJSON *err_msg = cJSON_GetObjectItemCaseSensitive (body, "error_msg");
+
+		if ( cJSON_IsString (err_msg) && err_msg->valuestring != NULL) {
+			ESP_LOGE (__FUNCTION__, "GG Error message: %s", err_msg->valuestring);
+		}
+	}
+
+end:
+	cJSON_Delete(json);
+	return res;
+}

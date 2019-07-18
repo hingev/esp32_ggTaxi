@@ -23,9 +23,14 @@ enum DisplayState display_state = NONE;
 
 
 static double display_en_route_distance = 0;
+static float display_tariff_dram = 0;
 
 void display_set_distance (double dist) {
 	display_en_route_distance = dist;
+}
+
+void display_set_tariff (float dram) {
+	display_tariff_dram = dram;
 }
 
 #define LED_CNT								16
@@ -121,32 +126,37 @@ static void display_task (void *pvParameters) {
 		}
 
 		res = xEventGroupWaitBits (display_event_group,
-								   0xFF,
+								   0xFFFF,
 								   1, /* xClearOnExit */
 								   0, /* xWaitForAllBits */
 								   30 / portTICK_PERIOD_MS);
-
 		if (res) {
-			if (res & (1 << IDLE)) {
+			if (res & (1UL << IDLE)) {
 				display_state = IDLE;
 			}
-			else if (res & (1 << SEARCHING)) {
+			else if (res & (1UL << SEARCHING)) {
 				display_state = SEARCHING;
 			}
-			else if (res & (1 << EN_ROUTE)) {
+			else if (res & (1UL << EN_ROUTE)) {
 				display_state = EN_ROUTE;
 			}
-			else if (res & (1 << IN_PLACE)) {
+			else if (res & (1UL << IN_PLACE)) {
 				display_state = IN_PLACE;
 			}
-			else if (res & (1 << IN_PROGRESS)) {
+			else if (res & (1UL << IN_PROGRESS)) {
 				display_state = IN_PROGRESS;
 			}
-			else if (res & (1 << ENDED)) {
-				display_state = IDLE;
+			else if (res & (1UL << ENDED)) {
+				display_state = IDLE_READY;
 			}
-			else if (res & (1 << CANCELED)) {
-				display_state = IDLE;
+			else if (res & (1UL << CANCELED)) {
+				display_state = IDLE_READY;
+			}
+			else if (res & (1UL << TARIFF)) {
+				display_state = TARIFF;
+			}
+			else if (res & (1UL << IDLE_READY)) {
+				display_state = IDLE_READY;
 			}
 			/* reset the state machine */
 			step = 0;
@@ -165,6 +175,7 @@ static void display_task (void *pvParameters) {
 			}
 			break;
 		case IDLE:
+		case IDLE_READY:
 			if (sub_state == 0) {
 				/* printf ( "picking led"); */
 				do {
@@ -181,7 +192,10 @@ static void display_task (void *pvParameters) {
 				/* printf ( "Increaing /"); */
 				step ++;
 				leds[cur_led].r = step;
-				leds[cur_led].g = 0;
+				if (display_state == IDLE_READY)
+					leds[cur_led].g = step;
+				else
+					leds[cur_led].g = 0;
 				leds[cur_led].b = 0;
 
 				if (step == 30)
@@ -192,7 +206,10 @@ static void display_task (void *pvParameters) {
 				/* printf ( "decreaing /"); */
 				step -- ;
 				leds[cur_led].r = step;
-				leds[cur_led].g = 0;
+				if (display_state == IDLE_READY)
+					leds[cur_led].g = step;
+				else
+					leds[cur_led].g = 0;
 				leds[cur_led].b = 0;
 
 				if (step == 0)
@@ -338,6 +355,22 @@ static void display_task (void *pvParameters) {
 			}
 			ws2812_send_colors (leds, LED_CNT);
 			break;
+		case TARIFF:
+			if (sub_state == 0) {
+				memset (leds, 0, LED_CNT * sizeof (Color));
+				for (i=0; i < LED_CNT && i < display_tariff_dram / 100.; ++i) {
+					leds[i].g = 20;
+				}
+				ws2812_send_colors (leds, LED_CNT);
+				sub_state = 1;
+			}
+			else {
+				sub_state ++;
+			}
+			if (sub_state > 70) {
+				display_state_set (IDLE_READY);
+			}
+			break;
 		default:
 			break;
 		}
@@ -359,7 +392,8 @@ void display_task_start () {
 }
 
 void display_state_set (enum DisplayState st) {
+	ESP_LOGW ("DISP", "Setting display state to %lx", (1UL << st));
 	xEventGroupSetBits (display_event_group,
-						(1 << st));
+						(uint32_t)(1UL << st));
 
 }
